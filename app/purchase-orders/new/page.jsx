@@ -1,101 +1,100 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  PDFDownloadLink,
-  PDFViewer,
-} from "@react-pdf/renderer";
+  collection,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 
+import { db } from "@/lib/firebase";
 import PurchaseOrderPDF from "@/components/PurchaseOrderPDF";
 
-/* =====================================================
-   Temporary Supplier Data
-   Later this will come from Firebase
-===================================================== */
-
-const suppliers = [
-  {
-    id: "abc-plasterboard",
-    name: " LK Plastering",
-    abn: " 44 397 435 325",
-    contact: "Kun Liu",
-    email: "huize0616@gmail.com",
-    phone: "-",
-  },
-  {
-    id: "xyz-aluminium",
-    name: "XYZ Aluminium",
-    abn: "23 456 789 012",
-    contact: "David Lee",
-    email: "david@xyzaluminium.com.au",
-    phone: "07 3234 5678",
-  },
-  {
-    id: "prime-carpentry",
-    name: "Prime Carpentry",
-    abn: "34 567 890 123",
-    contact: "Michael Brown",
-    email: "michael@primecarpentry.com.au",
-    phone: "0412 345 678",
-  },
-  {
-    id: "brisbane-insulation",
-    name: "Brisbane Insulation Services",
-    abn: "45 678 901 234",
-    contact: "Sarah Wilson",
-    email: "sarah@brisbaneinsulation.com.au",
-    phone: "0433 456 789",
-  },
-];
-
-
 export default function NewPurchaseOrderPage() {
- const [showPreview, setShowPreview] = useState(false);
   /* =====================================================
-     Default Supplier
+     Suppliers
   ===================================================== */
 
-  const [selectedSupplierId, setSelectedSupplierId] = useState(
-    suppliers[0]?.id || ""
-  );
+  const [suppliers, setSuppliers] = useState([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
 
-
-  /* =====================================================
-     PO Items
-  ===================================================== */
-
-  const [items, setItems] = useState([
-    {
-      description: "",
-      qty: 1,
-      unitPrice: "",
-    },
-  ]);
-
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
 
   /* =====================================================
      Form
   ===================================================== */
 
-  const [form, setForm] = useState({
-    poNumber: "PO-2026-00125",
+    const [form, setForm] = useState({
+      poNumber: "",
+      projectName: "",
+      status: "Draft",
+      poDate: new Date().toISOString().split("T")[0],
+      deliveryDate: "",
+      siteAddress: "",
+      scopeOfWork: "",
+      projectManager: "Eason",
+      projectManagerEmail: "eason.z@yjliningscreation.com.au",
+      siteManager: "",
+      siteManagerEmail: "",
+    });
 
-    poDate: new Date().toISOString().split("T")[0],
+  /* =====================================================
+     Items
+  ===================================================== */
 
-    deliveryDate: "",
+  const [items, setItems] = useState([
+    {
+      description: "Level",
+      qty: 1,
+      unitPrice: "",
+    },
+  ]);
 
-    siteAddress: "",
+  /* =====================================================
+     UI State
+  ===================================================== */
 
-    scopeOfWork: "",
+  const [showPreview, setShowPreview] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-    projectManager: "",
-    projectManagerEmail: "",
+  /* =====================================================
+     Load Suppliers
+  ===================================================== */
 
-    siteManager: "",
-    siteManagerEmail: "",
-  });
+  useEffect(() => {
+    const loadSuppliers = async () => {
+      try {
+        setLoadingSuppliers(true);
+        setError("");
 
+        const snapshot = await getDocs(
+          collection(db, "Suppliers")
+        );
+
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setSuppliers(data);
+
+        if (data.length > 0) {
+          setSelectedSupplierId(data[0].id);
+        }
+      } catch (err) {
+        console.error("Error loading suppliers:", err);
+        setError("Failed to load suppliers.");
+      } finally {
+        setLoadingSuppliers(false);
+      }
+    };
+
+    loadSuppliers();
+  }, []);
 
   /* =====================================================
      Selected Supplier
@@ -105,39 +104,29 @@ export default function NewPurchaseOrderPage() {
     return suppliers.find(
       (supplier) => supplier.id === selectedSupplierId
     );
-  }, [selectedSupplierId]);
-
+  }, [suppliers, selectedSupplierId]);
 
   /* =====================================================
-     Form Update
+     Form Change
   ===================================================== */
 
-  function updateForm(field, value) {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
     setForm((prev) => ({
       ...prev,
-      [field]: value,
+      [name]: value,
     }));
-  }
-
-
-  /* =====================================================
-     Supplier Change
-  ===================================================== */
-
-  function handleSupplierChange(e) {
-    setSelectedSupplierId(e.target.value);
-  }
-
+  };
 
   /* =====================================================
-     Item Update
+     Item Change
   ===================================================== */
 
-  function updateItem(index, field, value) {
-
+  const handleItemChange = (index, field, value) => {
     setItems((prev) =>
-      prev.map((item, itemIndex) =>
-        itemIndex === index
+      prev.map((item, i) =>
+        i === index
           ? {
               ...item,
               [field]: value,
@@ -145,16 +134,13 @@ export default function NewPurchaseOrderPage() {
           : item
       )
     );
-
-  }
-
+  };
 
   /* =====================================================
      Add Item
   ===================================================== */
 
-  function addItem() {
-
+  const addItem = () => {
     setItems((prev) => [
       ...prev,
       {
@@ -163,973 +149,754 @@ export default function NewPurchaseOrderPage() {
         unitPrice: "",
       },
     ]);
-
-  }
-
+  };
 
   /* =====================================================
      Remove Item
   ===================================================== */
 
-  function removeItem(index) {
-
+  const removeItem = (index) => {
     setItems((prev) => {
-
       if (prev.length === 1) {
         return prev;
       }
 
-      return prev.filter(
-        (_, itemIndex) => itemIndex !== index
-      );
-
+      return prev.filter((_, i) => i !== index);
     });
-
-  }
-
+  };
 
   /* =====================================================
      Totals
   ===================================================== */
 
   const subtotal = useMemo(() => {
-
     return items.reduce((sum, item) => {
-
       const qty = Number(item.qty) || 0;
-
-      const unitPrice =
-        Number(item.unitPrice) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
 
       return sum + qty * unitPrice;
-
     }, 0);
-
   }, [items]);
-
 
   const gst = subtotal * 0.1;
 
   const total = subtotal + gst;
 
-
   /* =====================================================
-     Scope of Work
-     Maximum 20 lines
+     Scope Line Limit
   ===================================================== */
 
-  function handleScopeChange(e) {
+  const scopeLineCount = form.scopeOfWork
+    ? form.scopeOfWork.split("\n").length
+    : 0;
 
-    const value = e.target.value;
+  /* =====================================================
+     Generate / Save PO
+  ===================================================== */
 
-    const lines = value.split("\n");
+  const handleGeneratePO = async () => {
+    try {
+      setError("");
 
-    if (lines.length <= 20) {
+      if (!selectedSupplier) {
+        setError("Please select a supplier.");
+        return;
+      }
 
-      updateForm("scopeOfWork", value);
+      if (!form.poNumber.trim()) {
+        setError("Please enter a PO number.");
+        return;
+      }
 
-    }
+      setSaving(true);
 
-  }
-
-
-    /* =====================================================
-    Generate PO
-    ===================================================== */
-
-    function handleGeneratePO() {
-    const poData = {
-        poNumber: form.poNumber,
+      const poData = {
+        poNumber: form.poNumber.trim(),
         poDate: form.poDate,
         deliveryDate: form.deliveryDate,
+        Status: form.status,
 
         siteAddress: form.siteAddress,
-
         scopeOfWork: form.scopeOfWork,
 
+        projectName: form.projectName,
         projectManager: form.projectManager,
         projectManagerEmail: form.projectManagerEmail,
 
         siteManager: form.siteManager,
         siteManagerEmail: form.siteManagerEmail,
 
-        supplier: selectedSupplier,
+        supplierId: selectedSupplier.id,
 
-        items,
-    };
+        supplier: {
+          id: selectedSupplier.id,
+          name: selectedSupplier.name || "",
+          abn: selectedSupplier.abn || "",
+          contact: selectedSupplier.contact || "",
+          email: selectedSupplier.email || "",
+          phone: selectedSupplier.phone || "",
+          address: selectedSupplier.address || "",
+        },
 
-    console.log("PO Data:", poData);
+        items: items.map((item) => {
+          const qty = Number(item.qty) || 0;
+          const unitPrice = Number(item.unitPrice) || 0;
 
-    setShowPreview(true);
+          return {
+            description: item.description || "",
+            qty,
+            unitPrice,
+            total: qty * unitPrice,
+          };
+        }),
+
+        subtotal,
+        gst,
+        total,
+
+        // New PO always starts as Draft
+        status: "Draft",
+
+        createdAt: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(
+        collection(db, "purchaseOrders"),
+        poData
+      );
+
+      console.log("PO created:", docRef.id);
+
+      setShowPreview(true);
+    } catch (err) {
+      console.error("Error creating PO:", err);
+
+      setError(
+        err.message || "Failed to create purchase order."
+      );
+    } finally {
+      setSaving(false);
     }
+  };
 
+  /* =====================================================
+     PDF Data
+  ===================================================== */
+
+  const poDataForPDF = {
+    poNumber: form.poNumber,
+    poDate: form.poDate,
+    deliveryDate: form.deliveryDate,
+
+    siteAddress: form.siteAddress,
+
+    scopeOfWork: form.scopeOfWork,
+
+    projectManager: form.projectManager,
+    projectManagerEmail: form.projectManagerEmail,
+
+    siteManager: form.siteManager,
+    siteManagerEmail: form.siteManagerEmail,
+
+    supplier: selectedSupplier
+      ? {
+          id: selectedSupplier.id,
+          name: selectedSupplier.name || "",
+          abn: selectedSupplier.abn || "",
+          contact: selectedSupplier.contact || "",
+          email: selectedSupplier.email || "",
+          phone: selectedSupplier.phone || "",
+          address: selectedSupplier.address || "",
+        }
+      : null,
+
+    items: items.map((item) => {
+      const qty = Number(item.qty) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
+
+      return {
+        description: item.description || "",
+        qty,
+        unitPrice,
+        total: qty * unitPrice,
+      };
+    }),
+
+    subtotal,
+    gst,
+    total,
+
+    status: "Issued",
+  };
+
+  /* =====================================================
+     Render
+  ===================================================== */
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="mx-auto max-w-6xl">
 
+        {/* =================================================
+            Header
+        ================================================= */}
 
-      {/* =================================================
-          Header
-      ================================================= */}
-
-      <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
-
-        <div className="flex items-center gap-4">
-
-          <Link
-            href="/purchase-orders"
-            className="text-sm text-gray-500 hover:text-gray-900"
-          >
-            ← Purchase Orders
-          </Link>
-
-          <div className="h-5 w-px bg-gray-200" />
-
+        <div className="mb-8 flex items-center justify-between">
           <div>
+            <Link
+              href="/purchase-orders"
+              className="text-sm text-gray-500 hover:text-black"
+            >
+              ← Purchase Orders
+            </Link>
 
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="mt-2 text-3xl font-bold">
               New Purchase Order
             </h1>
 
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="mt-1 text-gray-500">
               Create a new purchase order
             </p>
-
           </div>
-
         </div>
 
+        {/* =================================================
+            Error
+        ================================================= */}
 
-        <div className="flex items-center gap-3">
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+        {/* =================================================
+            PO Management
+        ================================================= */}
 
-          <Link
-            href="/purchase-orders"
-            className="px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
-          >
-            Cancel
-          </Link>
-
-          <button
-            onClick={handleGeneratePO}
-            className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
-          >
-            Generate PO
-          </button>
-
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Project Name
+          </label>
+          <input
+            type="text"
+            value={form.projectName}
+            onChange={(e) =>
+              setForm({ ...form, projectName: e.target.value })
+            }
+            className="w-full border rounded-lg px-3 py-2"
+            placeholder="Enter project name"
+          />
         </div>
 
-      </header>
-
-
-      {/* =================================================
-          Main Content
-      ================================================= */}
-
-      <div className="p-8 max-w-7xl">
-
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Status
+          </label>
+          <select
+            value={form.status}
+            onChange={(e) =>
+              setForm({ ...form, status: e.target.value })
+            }
+            className="w-full border rounded-lg px-3 py-2"
+          >
+            <option value="Draft">Draft</option>
+            <option value="Issued">Issued</option>
+            <option value="Approved">Approved</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+        
 
         {/* =================================================
             PO Information
         ================================================= */}
 
-        <section className="bg-white border border-gray-200 rounded-xl mb-6">
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-xl font-semibold">
+            PO Information
+          </h2>
 
-          <SectionHeader
-            title="Purchase Order Information"
-            description="Basic purchase order details"
-          />
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
 
-          <div className="p-6">
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                PO Number
+              </label>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-              <FormField
-                label="PO Number"
+              <input
+                type="text"
+                name="poNumber"
                 value={form.poNumber}
-                onChange={(value) =>
-                  updateForm("poNumber", value)
-                }
+                onChange={handleChange}
+                placeholder="PO-2026-001"
+                className="w-full rounded-lg border px-4 py-3"
               />
+            </div>
 
-              <FormField
-                label="PO Date"
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                PO Date
+              </label>
+
+              <input
                 type="date"
+                name="poDate"
                 value={form.poDate}
-                onChange={(value) =>
-                  updateForm("poDate", value)
-                }
+                onChange={handleChange}
+                className="w-full rounded-lg border px-4 py-3"
               />
+            </div>
 
-              <FormField
-                label="Delivery Date"
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Delivery Date
+              </label>
+
+              <input
                 type="date"
+                name="deliveryDate"
                 value={form.deliveryDate}
-                onChange={(value) =>
-                  updateForm("deliveryDate", value)
-                }
+                onChange={handleChange}
+                className="w-full rounded-lg border px-4 py-3"
               />
-
             </div>
 
           </div>
-
         </section>
-
 
         {/* =================================================
             Supplier
         ================================================= */}
 
-        <section className="bg-white border border-gray-200 rounded-xl mb-6">
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-xl font-semibold">
+            Supplier
+          </h2>
 
-          <SectionHeader
-            title="Supplier"
-            description="Select an existing supplier"
-          />
-
-          <div className="p-6">
-
-
-            {/* Supplier Select */}
-
-            <div className="mb-6">
-
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-
-                Supplier
-
-                <span className="text-red-500 ml-1">
-                  *
-                </span>
-
+          {loadingSuppliers ? (
+            <p className="text-gray-500">
+              Loading suppliers...
+            </p>
+          ) : suppliers.length === 0 ? (
+            <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800">
+              No suppliers found. Please create a supplier first.
+            </div>
+          ) : (
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Select Supplier
               </label>
 
               <select
                 value={selectedSupplierId}
-                onChange={handleSupplierChange}
-                className="input"
+                onChange={(e) =>
+                  setSelectedSupplierId(e.target.value)
+                }
+                className="w-full rounded-lg border px-4 py-3"
               >
-
                 {suppliers.map((supplier) => (
-
                   <option
                     key={supplier.id}
                     value={supplier.id}
                   >
                     {supplier.name}
                   </option>
-
                 ))}
-
               </select>
-
-              <p className="text-xs text-gray-500 mt-2">
-                Select from your existing suppliers.
-              </p>
-
             </div>
+          )}
 
+          {selectedSupplier && (
+            <div className="mt-5 rounded-lg bg-gray-50 p-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
-            {/* Supplier Details */}
+                <div>
+                  <p className="text-xs text-gray-500">
+                    Supplier
+                  </p>
+                  <p className="font-medium">
+                    {selectedSupplier.name || "-"}
+                  </p>
+                </div>
 
-            {selectedSupplier && (
+                <div>
+                  <p className="text-xs text-gray-500">
+                    ABN
+                  </p>
+                  <p>
+                    {selectedSupplier.abn || "-"}
+                  </p>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <p className="text-xs text-gray-500">
+                    Contact
+                  </p>
+                  <p>
+                    {selectedSupplier.contact || "-"}
+                  </p>
+                </div>
 
-                <ReadOnlyField
-                  label="ABN"
-                  value={selectedSupplier.abn}
-                />
+                <div>
+                  <p className="text-xs text-gray-500">
+                    Email
+                  </p>
+                  <p>
+                    {selectedSupplier.email || "-"}
+                  </p>
+                </div>
 
-                <ReadOnlyField
-                  label="Contact Name"
-                  value={selectedSupplier.contact}
-                />
+                <div>
+                  <p className="text-xs text-gray-500">
+                    Phone
+                  </p>
+                  <p>
+                    {selectedSupplier.phone || "-"}
+                  </p>
+                </div>
 
-                <ReadOnlyField
-                  label="Email"
-                  value={selectedSupplier.email}
-                />
-
-                <ReadOnlyField
-                  label="Phone"
-                  value={selectedSupplier.phone}
-                />
+                <div>
+                  <p className="text-xs text-gray-500">
+                    Address
+                  </p>
+                  <p>
+                    {selectedSupplier.address || "-"}
+                  </p>
+                </div>
 
               </div>
-
-            )}
-
-          </div>
-
+            </div>
+          )}
         </section>
-
 
         {/* =================================================
             Site Address
         ================================================= */}
 
-        <section className="bg-white border border-gray-200 rounded-xl mb-6">
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-xl font-semibold">
+            Site Address
+          </h2>
 
-          <SectionHeader
-            title="Site Address"
-            description="Where the goods or services will be delivered"
+          <textarea
+            name="siteAddress"
+            value={form.siteAddress}
+            onChange={handleChange}
+            rows={3}
+            placeholder="Enter project/site address"
+            className="w-full rounded-lg border px-4 py-3"
           />
-
-          <div className="p-6">
-
-            <textarea
-              value={form.siteAddress}
-              onChange={(e) =>
-                updateForm(
-                  "siteAddress",
-                  e.target.value
-                )
-              }
-              rows={3}
-              placeholder="Enter site address..."
-              className="input resize-none"
-            />
-
-          </div>
-
         </section>
-
 
         {/* =================================================
             Order Items
         ================================================= */}
 
-        <section className="bg-white border border-gray-200 rounded-xl mb-6">
-
-          <SectionHeader
-            title="Order Items"
-            description="Add products, materials or services"
-          />
-
-
-          <div className="p-6">
-
-            <div className="overflow-x-auto">
-
-              <table className="w-full">
-
-                <thead>
-
-                  <tr className="border-b border-gray-200">
-
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase pb-3">
-                      Description
-                    </th>
-
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase pb-3 w-24">
-                      Qty
-                    </th>
-
-                    <th className="text-left text-xs font-semibold text-gray-500 uppercase pb-3 w-40">
-                      Unit Price
-                    </th>
-
-                    <th className="text-right text-xs font-semibold text-gray-500 uppercase pb-3 w-40">
-                      Total
-                    </th>
-
-                    <th className="w-12" />
-
-                  </tr>
-
-                </thead>
-
-
-                <tbody>
-
-                  {items.map((item, index) => {
-
-                    const lineTotal =
-                      (Number(item.qty) || 0) *
-                      (Number(item.unitPrice) || 0);
-
-
-                    return (
-
-                      <tr
-                        key={index}
-                        className="border-b border-gray-100"
-                      >
-
-                        <td className="py-3 pr-3">
-
-                          <input
-                            type="text"
-                            value={item.description}
-                            onChange={(e) =>
-                              updateItem(
-                                index,
-                                "description",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Item description"
-                            className="input"
-                          />
-
-                        </td>
-
-
-                        <td className="py-3 pr-3">
-
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={item.qty}
-                            onChange={(e) =>
-                              updateItem(
-                                index,
-                                "qty",
-                                e.target.value
-                              )
-                            }
-                            className="input"
-                          />
-
-                        </td>
-
-
-                        <td className="py-3 pr-3">
-
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.unitPrice}
-                            onChange={(e) =>
-                              updateItem(
-                                index,
-                                "unitPrice",
-                                e.target.value
-                              )
-                            }
-                            placeholder="0.00"
-                            className="input"
-                          />
-
-                        </td>
-
-
-                        <td className="py-3 text-right text-sm font-medium text-gray-900">
-
-                          {money(lineTotal)}
-
-                        </td>
-
-
-                        <td className="py-3 text-right">
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeItem(index)
-                            }
-                            disabled={items.length === 1}
-                            className="text-gray-400 hover:text-red-600 disabled:opacity-30"
-                          >
-                            ×
-                          </button>
-
-                        </td>
-
-                      </tr>
-
-                    );
-
-                  })}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-
-            {/* Add Item */}
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-xl font-semibold">
+              Order Items
+            </h2>
 
             <button
               type="button"
               onClick={addItem}
-              className="mt-4 text-sm font-medium text-gray-700 hover:text-gray-900"
+              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
             >
               + Add Item
             </button>
+          </div>
 
+          <div className="space-y-4">
 
-            {/* Totals */}
+            {items.map((item, index) => {
+              const itemTotal =
+                (Number(item.qty) || 0) *
+                (Number(item.unitPrice) || 0);
 
-            <div className="flex justify-end mt-8">
+              return (
+                <div
+                  key={index}
+                  className="grid grid-cols-12 gap-3"
+                >
 
-              <div className="w-72 space-y-3">
+                  <div className="col-span-5">
+                    <input
+                      type="text"
+                      value={item.description}
+                      onChange={(e) =>
+                        handleItemChange(
+                          index,
+                          "description",
+                          e.target.value
+                        )
+                      }
+                      placeholder="Description"
+                      className="w-full rounded-lg border px-4 py-3"
+                    />
+                  </div>
 
-                <TotalRow
-                  label="Subtotal"
-                  value={money(subtotal)}
-                />
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={item.qty}
+                      onChange={(e) =>
+                        handleItemChange(
+                          index,
+                          "qty",
+                          e.target.value
+                        )
+                      }
+                      placeholder="Qty"
+                      className="w-full rounded-lg border px-4 py-3"
+                    />
+                  </div>
 
-                <TotalRow
-                  label="GST 10%"
-                  value={money(gst)}
-                />
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.unitPrice}
+                      onChange={(e) =>
+                        handleItemChange(
+                          index,
+                          "unitPrice",
+                          e.target.value
+                        )
+                      }
+                      placeholder="Unit Price"
+                      className="w-full rounded-lg border px-4 py-3"
+                    />
+                  </div>
 
-                <div className="border-t border-gray-200 pt-3 flex justify-between">
+                  <div className="col-span-2 flex items-center rounded-lg bg-gray-50 px-4">
+                    ${itemTotal.toFixed(2)}
+                  </div>
 
-                  <span className="font-semibold text-gray-900">
-                    Total
-                  </span>
-
-                  <span className="font-semibold text-gray-900">
-                    {money(total)}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(index)}
+                    className="col-span-1 text-red-500 hover:text-red-700"
+                  >
+                    ×
+                  </button>
 
                 </div>
-
-              </div>
-
-            </div>
+              );
+            })}
 
           </div>
 
-        </section>
+          <div className="mt-8 ml-auto max-w-sm space-y-3 border-t pt-5">
 
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>${subtotal.toFixed(2)}</span>
+            </div>
+
+            <div className="flex justify-between">
+              <span>GST (10%)</span>
+              <span>${gst.toFixed(2)}</span>
+            </div>
+
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total</span>
+              <span>${total.toFixed(2)}</span>
+            </div>
+
+          </div>
+        </section>
 
         {/* =================================================
             Scope of Work
         ================================================= */}
 
-        <section className="bg-white border border-gray-200 rounded-xl mb-6">
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xl font-semibold">
+              Scope of Work
+            </h2>
 
-          <SectionHeader
-            title="Scope of Work"
-            description="Maximum 20 lines"
-          />
-
-          <div className="p-6">
-
-            <textarea
-              value={form.scopeOfWork}
-              onChange={handleScopeChange}
-              rows={10}
-              placeholder="Enter scope of work..."
-              className="input resize-none"
-            />
-
-            <div className="text-xs text-gray-500 mt-2">
-              {form.scopeOfWork.split("\n").length} / 20 lines
-            </div>
-
+            <span className="text-sm text-gray-500">
+              {scopeLineCount}/20 lines
+            </span>
           </div>
 
-        </section>
+          <textarea
+            name="scopeOfWork"
+            value={form.scopeOfWork}
+            onChange={(e) => {
+              const lines = e.target.value.split("\n");
 
+              if (lines.length <= 20) {
+                setForm((prev) => ({
+                  ...prev,
+                  scopeOfWork: e.target.value,
+                }));
+              }
+            }}
+            rows={10}
+            placeholder="Enter scope of work..."
+            className="w-full rounded-lg border px-4 py-3"
+          />
+        </section>
 
         {/* =================================================
             YJ Site Contact
         ================================================= */}
 
-        <section className="bg-white border border-gray-200 rounded-xl mb-6">
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-xl font-semibold">
+            YJ Site Contact
+          </h2>
 
-          <SectionHeader
-            title="YJ Site Contact"
-            description="Project and site contacts"
-          />
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-          <div className="p-6">
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Project Manager
+              </label>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-              <FormField
-                label="Project Manager"
+              <input
+                type="text"
+                name="projectManager"
                 value={form.projectManager}
-                onChange={(value) =>
-                  updateForm(
-                    "projectManager",
-                    value
-                  )
-                }
-                placeholder="Project manager name"
+                onChange={handleChange}
+                className="w-full rounded-lg border px-4 py-3"
               />
+            </div>
 
-              <FormField
-                label="Project Manager Email"
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Project Manager Email
+              </label>
+
+              <input
                 type="email"
+                name="projectManagerEmail"
                 value={form.projectManagerEmail}
-                onChange={(value) =>
-                  updateForm(
-                    "projectManagerEmail",
-                    value
-                  )
-                }
-                placeholder="pm@yjliningscreation.com.au"
+                onChange={handleChange}
+                className="w-full rounded-lg border px-4 py-3"
               />
+            </div>
 
-              <FormField
-                label="Site Manager"
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Site Manager
+              </label>
+
+              <input
+                type="text"
+                name="siteManager"
                 value={form.siteManager}
-                onChange={(value) =>
-                  updateForm(
-                    "siteManager",
-                    value
-                  )
-                }
-                placeholder="Site manager name"
+                onChange={handleChange}
+                className="w-full rounded-lg border px-4 py-3"
               />
+            </div>
 
-              <FormField
-                label="Site Manager Email"
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Site Manager Email
+              </label>
+
+              <input
                 type="email"
+                name="siteManagerEmail"
                 value={form.siteManagerEmail}
-                onChange={(value) =>
-                  updateForm(
-                    "siteManagerEmail",
-                    value
-                  )
-                }
-                placeholder="site@yjliningscreation.com.au"
+                onChange={handleChange}
+                className="w-full rounded-lg border px-4 py-3"
               />
-
             </div>
 
           </div>
-
         </section>
-
 
         {/* =================================================
             Trading Terms
-        ================================================= */}
+        ================================================= 
 
-        <section className="bg-white border border-gray-200 rounded-xl mb-6">
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-xl font-semibold">
+            Trading Terms
+          </h2>
 
-          <SectionHeader
-            title="Trading Terms"
-            description="Standard YJ Building Evolution terms"
-          />
-
-          <div className="p-6">
-
-            <div className="space-y-3 text-sm text-gray-700">
-
-              <p>
-                On completion of job, payment is due 15 days
-                from receipt of invoice on the 15th/30th Day
-                of each month.
-              </p>
-
-              <p>
-                ALL Variations must be approved by
-                YJ Building Evolution Pty Ltd before commencement.
-              </p>
-
-              <p>
-                Send all invoices directly to:
-                <span className="font-medium ml-1">
-                  account@yjliningscreation.com.au
-                </span>
-              </p>
-
-            </div>
-
-          </div>
-
+          <p className="text-sm leading-6 text-gray-600">
+            Payment terms are due 15 days from invoice.
+            Invoices are to be issued on the 15th or 30th
+            of each month.
+          </p>
         </section>
-
-
+*/}
         {/* =================================================
-            Bottom Actions
+            Actions
         ================================================= */}
 
-        <div className="flex items-center justify-end gap-3 pb-8">
+        <div className="flex justify-end gap-3">
 
           <Link
             href="/purchase-orders"
-            className="px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
+            className="rounded-lg border bg-white px-6 py-3 font-medium"
           >
             Cancel
           </Link>
 
           <button
+            type="button"
             onClick={handleGeneratePO}
-            className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
+            disabled={saving || loadingSuppliers}
+            className="rounded-lg bg-black px-6 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Generate PO
+            {saving ? "Saving..." : "Generate PO"}
           </button>
 
         </div>
 
-      </div>
-      {/* =================================================
+        {/* =================================================
             PDF Preview
         ================================================= */}
 
         {showPreview && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6">
+          <section className="mt-10 rounded-xl bg-white p-6 shadow-sm">
 
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">
+                Purchase Order Preview
+              </h2>
 
-            {/* Preview Header */}
-
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-
-                <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                    Purchase Order Preview
-                </h2>
-
-                <p className="text-sm text-gray-500 mt-1">
-                    {form.poNumber}
-                </p>
-                </div>
-
-                <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="text-gray-400 hover:text-gray-900 text-2xl leading-none"
-                >
-                ×
-                </button>
-
+              <PDFDownloadLink
+                document={
+                  <PurchaseOrderPDF
+                    data={poDataForPDF}
+                  />
+                }
+                fileName={`${form.poNumber || "purchase-order"}.pdf`}
+                className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
+              >
+                {({ loading }) =>
+                  loading ? "Preparing PDF..." : "Download PDF"
+                }
+              </PDFDownloadLink>
             </div>
 
-
-            {/* PDF Preview */}
-
-            <div className="flex-1 min-h-0 bg-gray-100 p-4">
-
-                <PDFViewer
+            <div className="h-[900px] overflow-hidden rounded-lg border">
+              <PDFViewer
                 width="100%"
                 height="100%"
-                showToolbar={false}
-                >
-
+                showToolbar
+              >
                 <PurchaseOrderPDF
-                    data={{
-                    poNumber: form.poNumber,
-                    poDate: form.poDate,
-                    deliveryDate: form.deliveryDate,
-
-                    siteAddress: form.siteAddress,
-
-                    scopeOfWork: form.scopeOfWork,
-
-                    projectManager: form.projectManager,
-                    projectManagerEmail:
-                        form.projectManagerEmail,
-
-                    siteManager: form.siteManager,
-                    siteManagerEmail:
-                        form.siteManagerEmail,
-
-                    supplier: selectedSupplier,
-
-                    items,
-                    }}
+                  data={poDataForPDF}
                 />
-
-                </PDFViewer>
-
+              </PDFViewer>
             </div>
 
-
-            {/* Preview Footer */}
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
-
-                <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
-                >
-                Back to Edit
-                </button>
-
-
-                <PDFDownloadLink
-                document={
-                    <PurchaseOrderPDF
-                    data={{
-                        poNumber: form.poNumber,
-                        poDate: form.poDate,
-                        deliveryDate: form.deliveryDate,
-
-                        siteAddress: form.siteAddress,
-
-                        scopeOfWork: form.scopeOfWork,
-
-                        projectManager:
-                        form.projectManager,
-
-                        projectManagerEmail:
-                        form.projectManagerEmail,
-
-                        siteManager:
-                        form.siteManager,
-
-                        siteManagerEmail:
-                        form.siteManagerEmail,
-
-                        supplier: selectedSupplier,
-
-                        items,
-                    }}
-                    />
-                }
-                fileName={`${form.poNumber}.pdf`}
-                >
-                {({ loading }) => (
-                    <button
-                    type="button"
-                    className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
-                    >
-                    {loading
-                        ? "Preparing PDF..."
-                        : "Download PDF"}
-                    </button>
-                )}
-                </PDFDownloadLink>
-
-            </div>
-
-            </div>
-
-        </div>
-        )}
-    </div>
-  );
-}
-
-
-/* =====================================================
-   Section Header
-===================================================== */
-
-function SectionHeader({
-  title,
-  description,
-}) {
-  return (
-    <div className="px-6 py-5 border-b border-gray-200">
-
-      <h2 className="text-base font-semibold text-gray-900">
-        {title}
-      </h2>
-
-      {description && (
-        <p className="text-sm text-gray-500 mt-1">
-          {description}
-        </p>
-      )}
-
-    </div>
-  );
-}
-
-
-/* =====================================================
-   Form Field
-===================================================== */
-
-function FormField({
-  label,
-  required = false,
-  type = "text",
-  value,
-  onChange,
-  placeholder,
-}) {
-  return (
-    <div>
-
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-
-        {label}
-
-        {required && (
-          <span className="text-red-500 ml-1">
-            *
-          </span>
+          </section>
         )}
 
-      </label>
-
-      <input
-        type={type}
-        value={value}
-        onChange={(e) =>
-          onChange(e.target.value)
-        }
-        placeholder={placeholder}
-        required={required}
-        className="input"
-      />
-
-    </div>
-  );
-}
-
-
-/* =====================================================
-   Read Only Field
-===================================================== */
-
-function ReadOnlyField({
-  label,
-  value,
-}) {
-  return (
-    <div>
-
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        {label}
-      </label>
-
-      <div className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-600 bg-gray-50">
-        {value || "-"}
       </div>
-
     </div>
   );
-}
-
-
-/* =====================================================
-   Total Row
-===================================================== */
-
-function TotalRow({
-  label,
-  value,
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-
-      <span className="text-gray-500">
-        {label}
-      </span>
-
-      <span className="font-medium text-gray-900">
-        {value}
-      </span>
-
-    </div>
-  );
-}
-
-
-/* =====================================================
-   Currency
-===================================================== */
-
-function money(value) {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-  }).format(value);
 }

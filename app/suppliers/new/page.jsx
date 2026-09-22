@@ -2,17 +2,28 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+
+import { db } from "@/lib/firebase";
 
 export default function NewSupplierPage() {
-  const [form, setForm] = useState({
-    name: "",
-    abn: "",
-    contact: "",
-    email: "",
-    phone: "",
-    address: "",
-    status: "Active",
-  });
+const [form, setForm] = useState({
+  projectName: "",
+  status: "Draft",
+
+  poNumber: "",
+  poDate: new Date().toISOString().split("T")[0],
+  deliveryDate: "",
+  siteAddress: "",
+  scopeOfWork: "",
+  projectManager: "",
+  projectManagerEmail: "",
+  siteManager: "",
+  siteManagerEmail: "",
+});
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   function updateForm(field, value) {
     setForm((prev) => ({
@@ -21,12 +32,97 @@ export default function NewSupplierPage() {
     }));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
-    console.log("Supplier:", form);
+    setError("");
+    setSaving(true);
 
-    alert("Supplier saved. Firebase connection will be added next.");
+    try {
+      //podata
+      const poData = {
+        projectName: form.projectName,
+
+        // 第一次生成永远 Draft
+        status: "Draft",
+
+        poNumber: form.poNumber.trim(),
+        poDate: form.poDate,
+        deliveryDate: form.deliveryDate,
+
+        siteAddress: form.siteAddress,
+
+        scopeOfWork: form.scopeOfWork,
+
+        projectManager: form.projectManager,
+        projectManagerEmail: form.projectManagerEmail,
+
+        siteManager: form.siteManager,
+        siteManagerEmail: form.siteManagerEmail,
+
+        supplierId: selectedSupplier.id,
+
+        supplier: {
+          id: selectedSupplier.id,
+          name: selectedSupplier.name || "",
+          abn: selectedSupplier.abn || "",
+          contact: selectedSupplier.contact || "",
+          email: selectedSupplier.email || "",
+          phone: selectedSupplier.phone || "",
+          address: selectedSupplier.address || "",
+        },
+
+        items: items.map((item) => {
+          const qty = Number(item.qty) || 0;
+          const unitPrice = Number(item.unitPrice) || 0;
+
+          return {
+            description: item.description || "",
+            qty,
+            unitPrice,
+            total: qty * unitPrice,
+          };
+        }),
+
+        subtotal,
+        gst,
+        total,
+
+        createdAt: serverTimestamp(),
+      };
+      // Create supplier in Firebase
+      const docRef = await addDoc(collection(db, "Suppliers"), {
+        name: form.name,
+        abn: form.abn,
+        contact: form.contact,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+        status: form.status,
+
+        // Initial values
+        orders: 0,
+        total: 0,
+
+        // Created time
+        createdAt: serverTimestamp(),
+      });
+
+      console.log("Supplier created:", docRef.id);
+
+      alert("Supplier saved successfully.");
+
+      // Go back to supplier list
+      window.location.href = "/suppliers";
+    } catch (err) {
+      console.error("Error creating supplier:", err);
+
+      setError(
+        err.message || "Failed to save supplier."
+      );
+
+      setSaving(false);
+    }
   }
 
   return (
@@ -60,11 +156,63 @@ export default function NewSupplierPage() {
 
       </header>
 
+       <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-xl font-semibold">
+            PO Management
+          </h2>
 
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Project Name
+              </label>
+
+              <input
+                type="text"
+                name="projectName"
+                value={form.projectName}
+                onChange={handleChange}
+                placeholder="Enter project name"
+                className="w-full rounded-lg border px-4 py-3"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Status
+              </label>
+
+              <select
+                name="status"
+                value={form.status}
+                onChange={handleChange}
+                className="w-full rounded-lg border px-4 py-3"
+              >
+                <option value="Draft">Draft</option>
+                <option value="Issued">Issued</option>
+                <option value="Approved">Approved</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+
+          </div>
+        </section>
       {/* Form */}
       <form onSubmit={handleSubmit}>
 
         <div className="p-8 max-w-5xl">
+
+          {/* Error */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">
+                {error}
+              </p>
+            </div>
+          )}
+
 
           {/* Supplier Information */}
           <section className="bg-white border border-gray-200 rounded-xl mb-6">
@@ -225,9 +373,10 @@ export default function NewSupplierPage() {
 
             <button
               type="submit"
-              className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
+              disabled={saving}
+              className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Supplier
+              {saving ? "Saving..." : "Save Supplier"}
             </button>
 
           </div>

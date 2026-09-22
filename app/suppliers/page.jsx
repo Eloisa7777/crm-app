@@ -1,76 +1,143 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-
-const suppliers = [
-  {
-    id: "abc-plasterboard",
-    name: " LK Plastering",
-    abn: "44397435325",
-    contact: "Kun Liu",
-    email: "huize0616@gmail.com",
-    phone: "-",
-    address: "-",
-    status: "Active",
-    orders: 10,
-    total: 38450,
-  },
-  {
-    id: "xyz-aluminium",
-    name: "XYZ Aluminium",
-    abn: "23 456 789 012",
-    contact: "David Lee",
-    email: "david@xyzaluminium.com.au",
-    phone: "07 3234 5678",
-    address: "18 Trade Street, Brisbane QLD 4101",
-    status: "Active",
-    orders: 8,
-    total: 27680,
-  },
-  {
-    id: "prime-carpentry",
-    name: "Prime Carpentry",
-    abn: "34 567 890 123",
-    contact: "Michael Brown",
-    email: "michael@primecarpentry.com.au",
-    phone: "0412 345 678",
-    address: "10 Builder Avenue, Logan QLD 4114",
-    status: "Active",
-    orders: 6,
-    total: 18920,
-  },
-  {
-    id: "brisbane-insulation",
-    name: "Brisbane Insulation Services",
-    abn: "45 678 901 234",
-    contact: "Sarah Wilson",
-    email: "sarah@brisbaneinsulation.com.au",
-    phone: "0433 456 789",
-    address: "42 Commerce Drive, Eagle Farm QLD 4009",
-    status: "Inactive",
-    orders: 3,
-    total: 8240,
-  },
-];
+import { useEffect, useMemo, useState } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function SuppliersPage() {
+  const [suppliers, setSuppliers] = useState([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  /* =========================
+     Load Suppliers from Firebase
+  ========================= */
+
+  useEffect(() => {
+    async function loadSuppliers() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const snapshot = await getDocs(
+          collection(db, "Suppliers")
+        );
+
+        const data = snapshot.docs.map((doc) => {
+          const supplier = doc.data();
+
+          return {
+            id: doc.id,
+            name: supplier.name || "",
+            abn: supplier.abn || "",
+            contact: supplier.contact || "",
+            email: supplier.email || "",
+            phone: supplier.phone || "-",
+            address: supplier.address || "-",
+            status: supplier.status || "Active",
+            // Temporary for MVP
+            orders: supplier.orders || 0,
+            total: supplier.total || 0,
+          };
+        });
+
+        setSuppliers(data);
+      } catch (error) {
+        console.error("Failed to load suppliers:", error);
+        setError("Failed to load suppliers.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadSuppliers();
+  }, []);
+
+  /* =========================
+     Search + Status Filter
+  ========================= */
+
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((supplier) => {
+      const searchText = search.toLowerCase();
+
       const matchesSearch =
-        supplier.name.toLowerCase().includes(search.toLowerCase()) ||
-        supplier.contact.toLowerCase().includes(search.toLowerCase()) ||
-        supplier.email.toLowerCase().includes(search.toLowerCase());
+        supplier.name.toLowerCase().includes(searchText) ||
+        supplier.contact.toLowerCase().includes(searchText) ||
+        supplier.email.toLowerCase().includes(searchText);
 
       const matchesStatus =
         status === "All" || supplier.status === status;
 
       return matchesSearch && matchesStatus;
     });
-  }, [search, status]);
+  }, [suppliers, search, status]);
+
+  /* =========================
+     Loading
+  ========================= */
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">
+              Suppliers
+            </h1>
+
+            <p className="text-sm text-gray-500 mt-1">
+              Loading suppliers...
+            </p>
+          </div>
+        </header>
+
+        <div className="p-8">
+          <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-sm text-gray-500">
+            Loading suppliers from Firebase...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* =========================
+     Error
+  ========================= */
+
+  if (error) {
+    return (
+      <div className="min-h-screen">
+        <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">
+              Suppliers
+            </h1>
+
+            <p className="text-sm text-gray-500 mt-1">
+              Manage your suppliers and subcontractors
+            </p>
+          </div>
+        </header>
+
+        <div className="p-8">
+          <div className="bg-white border border-red-200 rounded-xl p-10 text-center">
+            <p className="text-sm text-red-600">
+              {error}
+            </p>
+
+            <p className="text-xs text-gray-500 mt-2">
+              Please check your Firebase configuration and Firestore permissions.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -96,6 +163,7 @@ export default function SuppliersPage() {
         </Link>
 
       </header>
+
 
       {/* Content */}
       <div className="p-8">
@@ -131,6 +199,7 @@ export default function SuppliersPage() {
 
         </div>
 
+
         {/* Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
 
@@ -158,6 +227,7 @@ export default function SuppliersPage() {
 
         </div>
 
+
         {/* Table */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
@@ -173,6 +243,7 @@ export default function SuppliersPage() {
             </p>
 
           </div>
+
 
           <div className="overflow-x-auto">
 
@@ -208,6 +279,7 @@ export default function SuppliersPage() {
                 </tr>
               </thead>
 
+
               <tbody>
 
                 {filteredSuppliers.map((supplier) => (
@@ -232,21 +304,26 @@ export default function SuppliersPage() {
 
                     </td>
 
+
                     <td className="px-6 py-4 text-gray-600">
                       {supplier.contact}
                     </td>
+
 
                     <td className="px-6 py-4 text-gray-600">
                       {supplier.phone}
                     </td>
 
+
                     <td className="px-6 py-4 text-gray-600">
                       {supplier.email}
                     </td>
 
+
                     <td className="px-6 py-4">
                       <StatusBadge status={supplier.status} />
                     </td>
+
 
                     <td className="px-6 py-4 text-right">
 
@@ -268,6 +345,7 @@ export default function SuppliersPage() {
             </table>
 
           </div>
+
 
           {filteredSuppliers.length === 0 && (
             <div className="px-6 py-12 text-center text-sm text-gray-500">
