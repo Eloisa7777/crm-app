@@ -7,20 +7,15 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function NewSupplierPage() {
-const [form, setForm] = useState({
-  projectName: "",
-  status: "Draft",
-
-  poNumber: "",
-  poDate: new Date().toISOString().split("T")[0],
-  deliveryDate: "",
-  siteAddress: "",
-  scopeOfWork: "",
-  projectManager: "",
-  projectManagerEmail: "",
-  siteManager: "",
-  siteManagerEmail: "",
-});
+  const [form, setForm] = useState({
+    name: "",
+    abn: "",
+    contact: "",
+    email: "",
+    phone: "",
+    address: "",
+    status: "Active",
+  });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -39,57 +34,6 @@ const [form, setForm] = useState({
     setSaving(true);
 
     try {
-      //podata
-      const poData = {
-        projectName: form.projectName,
-
-        // 第一次生成永远 Draft
-        status: "Draft",
-
-        poNumber: form.poNumber.trim(),
-        poDate: form.poDate,
-        deliveryDate: form.deliveryDate,
-
-        siteAddress: form.siteAddress,
-
-        scopeOfWork: form.scopeOfWork,
-
-        projectManager: form.projectManager,
-        projectManagerEmail: form.projectManagerEmail,
-
-        siteManager: form.siteManager,
-        siteManagerEmail: form.siteManagerEmail,
-
-        supplierId: selectedSupplier.id,
-
-        supplier: {
-          id: selectedSupplier.id,
-          name: selectedSupplier.name || "",
-          abn: selectedSupplier.abn || "",
-          contact: selectedSupplier.contact || "",
-          email: selectedSupplier.email || "",
-          phone: selectedSupplier.phone || "",
-          address: selectedSupplier.address || "",
-        },
-
-        items: items.map((item) => {
-          const qty = Number(item.qty) || 0;
-          const unitPrice = Number(item.unitPrice) || 0;
-
-          return {
-            description: item.description || "",
-            qty,
-            unitPrice,
-            total: qty * unitPrice,
-          };
-        }),
-
-        subtotal,
-        gst,
-        total,
-
-        createdAt: serverTimestamp(),
-      };
       // Create supplier in Firebase
       const docRef = await addDoc(collection(db, "Suppliers"), {
         name: form.name,
@@ -156,49 +100,7 @@ const [form, setForm] = useState({
 
       </header>
 
-       <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-xl font-semibold">
-            PO Management
-          </h2>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Project Name
-              </label>
-
-              <input
-                type="text"
-                name="projectName"
-                value={form.projectName}
-                onChange={handleChange}
-                placeholder="Enter project name"
-                className="w-full rounded-lg border px-4 py-3"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Status
-              </label>
-
-              <select
-                name="status"
-                value={form.status}
-                onChange={handleChange}
-                className="w-full rounded-lg border px-4 py-3"
-              >
-                <option value="Draft">Draft</option>
-                <option value="Issued">Issued</option>
-                <option value="Approved">Approved</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
-
-          </div>
-        </section>
       {/* Form */}
       <form onSubmit={handleSubmit}>
 
