@@ -15,8 +15,13 @@ const menuItems = [
     icon: "▣",
   },
   {
-    name: "Suppliers",
+    name: "Suppliers/Subcontractors",
     href: "/suppliers",
+    icon: "♙",
+  },
+  {
+    name: "Clients",
+    href: "/clients",
     icon: "♙",
   },
   {
