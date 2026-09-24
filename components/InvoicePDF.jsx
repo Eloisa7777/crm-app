@@ -173,6 +173,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
 
+  colTax: {
+    width: "10%",
+    textAlign: "right",
+    paddingHorizontal: 6,
+  },
+
   colAmount: {
     width: "20%",
     textAlign: "right",
@@ -408,10 +414,13 @@ const {
           Number(
             item?.unitPrice || 0
           );
+        
+        const tax =
+          Number(item?.tax || 0);
 
         return (
           sum +
-          qty * unitPrice
+          qty * unitPrice * (1 + tax / 100)
         );
       },
       0
@@ -727,6 +736,15 @@ const {
 
               <Text
                 style={[
+                  styles.colTax,
+                  styles.headerText,
+                ]}
+              >
+                Tax %
+              </Text>
+
+              <Text
+                style={[
                   styles.colAmount,
                   styles.headerText,
                 ]}
@@ -754,10 +772,16 @@ const {
                       item?.unitPrice ||
                         0
                     );
+                  
+                  const tax =
+                    Number(
+                      item?.tax || 0
+                    );
 
                   const amount =
                     qty *
-                    unitPrice;
+                    unitPrice *
+                    (1 + tax / 100);
 
                   return (
                     <View
@@ -795,6 +819,14 @@ const {
                         {formatCurrency(
                           unitPrice
                         )}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.colTax
+                        }
+                      >
+                        {tax}%
                       </Text>
 
                       <Text
@@ -837,6 +869,14 @@ const {
                 <Text
                   style={
                     styles.colPrice
+                  }
+                >
+                  -
+                </Text>
+
+                <Text
+                  style={
+                    styles.colTax
                   }
                 >
                   -

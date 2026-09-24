@@ -1,8 +1,59 @@
+
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import {
+  collection,
+  getCountFromServer,
+  query,
+  where,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function HomePage() {
+  const [purchaseOrders, setPurchaseOrders] = useState(0);
+  const [suppliers, setSuppliers] = useState(0);
+  const [outstandingInvoices, setOutstandingInvoices] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        // Purchase Orders
+        const poSnapshot = await getCountFromServer(
+          collection(db, "purchaseOrders"),
+          where("status", "==", "Issued")
+        );
+
+        // Suppliers
+        const supplierSnapshot = await getCountFromServer(
+          collection(db, "Suppliers")
+        );
+
+        // Outstanding Invoices
+        const outstandingInvoiceQuery = query(
+          collection(db, "invoices"),
+          where("status", "==", "Issued")
+        );
+
+        const invoiceSnapshot = await getCountFromServer(
+          outstandingInvoiceQuery
+        );
+
+        setPurchaseOrders(poSnapshot.data().count);
+        setSuppliers(supplierSnapshot.data().count);
+        setOutstandingInvoices(invoiceSnapshot.data().count);
+      } catch (error) {
+        console.error("Failed to load dashboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDashboard();
+  }, []);
+
   return (
     <div className="min-h-screen">
 
@@ -36,25 +87,25 @@ export default function HomePage() {
 
           <DashboardCard
             title="Active Projects"
-            value="12"
+            value="-"
             description="Currently in progress"
           />
 
           <DashboardCard
             title="Purchase Orders"
-            value="48"
-            description="This financial year"
+            value={loading ? "—" : purchaseOrders}
+            description="Total purchase orders"
           />
 
           <DashboardCard
-            title="Outstanding Invoices"
-            value="$24,580"
-            description="Awaiting payment"
+            title="Invoices Issued"
+            value={loading ? "—" : outstandingInvoices}
+            description="Recently issued"
           />
 
           <DashboardCard
             title="Suppliers"
-            value="36"
+            value={loading ? "—" : suppliers}
             description="Active suppliers"
           />
 
@@ -90,3 +141,4 @@ function DashboardCard({
     </div>
   );
 }
+

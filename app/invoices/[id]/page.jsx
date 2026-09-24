@@ -123,6 +123,8 @@ export default function InvoiceDetailPage() {
 
               unitPrice:
                 Number(item?.unitPrice) || 0,
+              tax:
+                Number(item?.tax) || 0,
             }))
           : [];
 
@@ -276,6 +278,7 @@ export default function InvoiceDetailPage() {
           description: "",
           qty: 1,
           unitPrice: 0,
+          tax: 0,
         },
       ],
     }));
@@ -309,9 +312,11 @@ export default function InvoiceDetailPage() {
         const unitPrice =
           Number(item?.unitPrice) || 0;
 
+        const tax = Number(item?.tax) || 0;
+
         return (
           sum +
-          qty * unitPrice
+          qty * unitPrice * (1 + tax / 100)
         );
       },
       0
@@ -338,6 +343,8 @@ export default function InvoiceDetailPage() {
       const unitPrice =
         Number(item?.unitPrice) || 0;
 
+      const tax = Number(item?.tax) || 0;
+
       return {
         description:
           item?.description || "",
@@ -346,8 +353,10 @@ export default function InvoiceDetailPage() {
 
         unitPrice,
 
+        tax,
+
         total:
-          qty * unitPrice,
+          qty * unitPrice * (1 + tax / 100),
       };
     });
   }, [form.items]);
@@ -455,6 +464,8 @@ export default function InvoiceDetailPage() {
           const unitPrice =
             Number(item?.unitPrice) || 0;
 
+          const tax = Number(item?.tax) || 0;
+
           return {
             description:
               item?.description || "",
@@ -463,8 +474,10 @@ export default function InvoiceDetailPage() {
 
             unitPrice,
 
+            tax,
+
             total:
-              qty * unitPrice,
+              qty * unitPrice * (1 + tax / 100),
           };
         });
 
@@ -1257,6 +1270,10 @@ export default function InvoiceDetailPage() {
                       Unit Price
                     </th>
 
+                    <th className="pb-3 pr-4">
+                      Tax %
+                    </th>
+
                     <th className="pb-3 text-right">
                       Total
                     </th>
@@ -1369,6 +1386,31 @@ export default function InvoiceDetailPage() {
                               `$${unitPrice.toFixed(
                                 2
                               )}`
+                            )}
+
+                          </td>
+
+                          <td className="py-4 pr-4">
+
+                            {editing ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={
+                                  item.tax
+                                }
+                                onChange={(e) =>
+                                  updateItem(
+                                    index,
+                                    "tax",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-24 rounded-lg border border-gray-300 px-3 py-2"
+                              />
+                            ) : (
+                              `${item.tax || 0}%`
                             )}
 
                           </td>
