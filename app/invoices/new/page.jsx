@@ -87,6 +87,7 @@ export default function NewInvoicePage() {
       description: "",
       qty: 1,
       unitPrice: "",
+      Tax: 0,
     },
   ]);
 
@@ -156,6 +157,7 @@ export default function NewInvoicePage() {
         description: "",
         qty: 1,
         unitPrice: "",
+        Tax: 0,
       },
     ]);
   }
@@ -180,11 +182,15 @@ export default function NewInvoicePage() {
       const unitPrice =
         Number(item.unitPrice) || 0;
 
+      const tax =
+        Number(item.tax) || 0;
+
       return {
         ...item,
         qty,
         unitPrice,
-        total: qty * unitPrice,
+        tax,
+        total: qty * unitPrice * (1 + tax / 100),
       };
     });
   }, [items]);
@@ -885,6 +891,10 @@ export default function NewInvoicePage() {
                       Unit Price
                     </th>
 
+                    <th className="w-24 pb-3 pr-3 font-medium text-gray-600">
+                      Tax %
+                    </th>
+
                     <th className="w-36 pb-3 pr-3 font-medium text-gray-600">
                       Total
                     </th>
@@ -964,7 +974,29 @@ export default function NewInvoicePage() {
                                   .value
                               )
                             }
-                            placeholder="0.00"
+                            placeholder=" "
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          />
+
+                        </td>
+
+                        <td className="py-3 pr-3">
+
+                          <input
+                            type="percent"
+                            min="0"
+                            step="0.1"
+                            value={
+                              item.tax || 0
+                            }
+                            onChange={(e) =>
+                              updateItem(
+                                index,
+                                "tax",
+                                e.target
+                                  .value
+                              )
+                            }
                             className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
                           />
 

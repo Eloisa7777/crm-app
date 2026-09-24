@@ -372,7 +372,7 @@ export default function NewPurchaseOrderPage() {
         {/* =================================================
             PO Management
         ================================================= */}
-
+      <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Project Name
@@ -406,7 +406,7 @@ export default function NewPurchaseOrderPage() {
             <option value="Cancelled">Cancelled</option>
           </select>
         </div>
-        
+      </section> 
 
         {/* =================================================
             PO Information
