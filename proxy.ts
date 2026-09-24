@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -11,7 +12,7 @@ const PO_ALLOWED_PATHS = [
   "/suppliers",
 ];
 
-export function proxy(request) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public pages / APIs
