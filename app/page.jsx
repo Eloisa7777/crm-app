@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   collection,
   getCountFromServer,
+  getDocs,
   query,
   where,
 } from "firebase/firestore";
@@ -13,39 +14,69 @@ import { db } from "@/lib/firebase";
 
 export default function HomePage() {
   const [purchaseOrders, setPurchaseOrders] = useState(0);
-  const [suppliers, setSuppliers] = useState(0);
   const [outstandingInvoices, setOutstandingInvoices] = useState(0);
+  const [receivableAmount, setReceivableAmount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
+        // =========================
         // Purchase Orders
-        const poSnapshot = await getCountFromServer(
+        // =========================
+        const purchaseOrderQuery = query(
           collection(db, "purchaseOrders"),
-          where("status", "==", "Issued")
+          where("status", "in", ["Issued", "Completed"])
         );
 
-        // Suppliers
-        const supplierSnapshot = await getCountFromServer(
-          collection(db, "Suppliers")
+        const poSnapshot = await getCountFromServer(
+          purchaseOrderQuery
         );
 
-        // Outstanding Invoices
-        const outstandingInvoiceQuery = query(
+        // =========================
+        // Invoices
+        // =========================
+        const invoiceQuery = query(
           collection(db, "invoices"),
           where("status", "==", "Issued")
         );
 
-        const invoiceSnapshot = await getCountFromServer(
-          outstandingInvoiceQuery
+        const invoiceSnapshot = await getDocs(
+          invoiceQuery
         );
 
-        setPurchaseOrders(poSnapshot.data().count);
-        setSuppliers(supplierSnapshot.data().count);
-        setOutstandingInvoices(invoiceSnapshot.data().count);
+        // =========================
+        // Calculate outstanding amount
+        // =========================
+        let totalReceivable = 0;
+
+        invoiceSnapshot.forEach((doc) => {
+          const data = doc.data();
+
+          totalReceivable += Number(
+            data.total ?? 0
+          );
+        });
+
+        // =========================
+        // Set dashboard values
+        // =========================
+        setPurchaseOrders(
+          poSnapshot.data().count
+        );
+
+        setOutstandingInvoices(
+          invoiceSnapshot.size
+        );
+
+        setReceivableAmount(
+          totalReceivable
+        );
       } catch (error) {
-        console.error("Failed to load dashboard:", error);
+        console.error(
+          "Failed to load dashboard:",
+          error
+        );
       } finally {
         setLoading(false);
       }
@@ -53,6 +84,7 @@ export default function HomePage() {
 
     loadDashboard();
   }, []);
+
 
   return (
     <div className="min-h-screen">
@@ -85,28 +117,53 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
 
+          {/* Active Projects */}
           <DashboardCard
             title="Active Projects"
             value="-"
             description="Currently in progress"
           />
 
+
+          {/* Purchase Orders */}
           <DashboardCard
             title="Purchase Orders"
-            value={loading ? "—" : purchaseOrders}
-            description="Total purchase orders"
+            value={
+              loading
+                ? "—"
+                : purchaseOrders
+            }
+            description="Total purchase orders made"
           />
 
+
+          {/* Invoices Issued */}
           <DashboardCard
             title="Invoices Issued"
-            value={loading ? "—" : outstandingInvoices}
-            description="Recently issued"
+            value={
+              loading
+                ? "—"
+                : outstandingInvoices
+            }
+            description="Total invoices issued"
           />
 
+
+          {/* Invoices Outstanding */}
           <DashboardCard
-            title="Suppliers"
-            value={loading ? "—" : suppliers}
-            description="Active suppliers"
+            title="Invoices Outstanding"
+            value={
+              loading
+                ? "—"
+                : `$${receivableAmount.toLocaleString(
+                    "en-AU",
+                    {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    }
+                  )}`
+            }
+            description="Awaiting customer payment"
           />
 
         </div>
@@ -141,4 +198,3 @@ function DashboardCard({
     </div>
   );
 }
-

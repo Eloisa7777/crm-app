@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 
-const USERNAME = "admin";
-const PASSWORD = "123456";
+const USERS = {
+  admin: {
+    password: "123456",
+    role: "admin",
+  },
+
+  yjpo: {
+    password: "8888000",
+    role: "yjpo",
+  },
+};
 
 export async function POST(request) {
   try {
@@ -9,7 +18,9 @@ export async function POST(request) {
 
     const { username, password } = body;
 
-    if (username !== USERNAME || password !== PASSWORD) {
+    const user = USERS[username];
+
+    if (!user || user.password !== password) {
       return NextResponse.json(
         { error: "Invalid username or password" },
         { status: 401 }
@@ -18,6 +29,7 @@ export async function POST(request) {
 
     const response = NextResponse.json({
       success: true,
+      role: user.role,
     });
 
     response.cookies.set({
@@ -27,7 +39,17 @@ export async function POST(request) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 8, // 1 hour
+      maxAge: 60 * 1,
+    });
+
+    response.cookies.set({
+      name: "yj_role",
+      value: user.role,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 1,
     });
 
     return response;

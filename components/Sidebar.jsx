@@ -46,26 +46,23 @@ const menuItems = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ role }) {
   const pathname = usePathname();
+
+  const isPOUser = role === "yjpo";
+
+  // yjpo can only access suppliers and purchase orders
+  const visibleMenuItems = isPOUser
+    ? menuItems.filter(
+        (item) =>
+          item.href === "/suppliers" ||
+          item.href === "/purchase-orders"
+      )
+    : menuItems;
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col shrink-0">
 
-      {/* Company 
-      <div className="h-20 px-6 flex items-center border-b border-gray-200">
-        <div>
-          <div className="text-lg font-bold text-gray-900">
-            YJ Building
-          </div>
-
-          <div className="text-xs text-gray-500">
-            Evolution Pty Ltd
-          </div>
-        </div>
-      </div>
-        */}     
-        
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5">
 
@@ -75,7 +72,7 @@ export default function Sidebar() {
 
         <div className="space-y-1">
 
-          {menuItems.map((item) => {
+          {visibleMenuItems.map((item) => {
 
             const active =
               item.href === "/"
@@ -99,7 +96,6 @@ export default function Sidebar() {
                   }
                 `}
               >
-
                 <span className="w-5 text-center text-base">
                   {item.icon}
                 </span>
@@ -107,7 +103,6 @@ export default function Sidebar() {
                 <span>
                   {item.name}
                 </span>
-
               </Link>
             );
           })}
@@ -121,17 +116,17 @@ export default function Sidebar() {
         <div className="flex items-center gap-3">
 
           <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold">
-            YJ
+            {isPOUser ? "PO" : "YJ"}
           </div>
 
           <div className="min-w-0">
 
             <div className="text-sm font-medium text-gray-900">
-              YJ Building
+              {isPOUser ? "YJ PO" : "YJ Building"}
             </div>
 
             <div className="text-xs text-gray-500 truncate">
-              Administration
+              {isPOUser ? "Purchase Orders" : "Administration"}
             </div>
 
           </div>
