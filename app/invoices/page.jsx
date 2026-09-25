@@ -145,7 +145,7 @@ export default function InvoicesPage() {
             window.location.href =
               "/invoices/new";
           }}
-          className="bg-black text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 transition"
+          className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
         >
           + New Invoice
         </button>

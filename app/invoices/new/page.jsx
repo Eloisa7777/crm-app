@@ -865,7 +865,7 @@ export default function NewInvoicePage() {
                 onClick={
                   addItem
                 }
-                className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
               >
                 + Add Item
               </button>
@@ -1229,7 +1229,7 @@ export default function NewInvoicePage() {
               disabled={
                 saving
               }
-              className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               {saving
                 ? "Saving..."
@@ -1263,7 +1263,7 @@ export default function NewInvoicePage() {
                     form.invoiceNumber ||
                     "invoice"
                   }.pdf`}
-                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                  className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
                 >
                   {({
                     loading,

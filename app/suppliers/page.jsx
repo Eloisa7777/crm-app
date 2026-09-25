@@ -157,7 +157,7 @@ export default function SuppliersPage() {
 
         <Link
           href="/suppliers/new"
-          className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition"
+          className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
         >
           + New Supplier
         </Link>

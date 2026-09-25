@@ -384,20 +384,20 @@ export default function ProjectDetailPage() {
     switch (status) {
       case "Paid":
       case "Completed":
-        return "bg-green-100 text-green-700";
+        return "bg-blue-100 text-blue-700";
 
       case "Issued":
       case "Sent":
       case "Active":
-        return "bg-blue-100 text-blue-700";
+        return "bg-green-100 text-green-700";
 
-      case "Outstanding":
+      case "On Hold":
         return "bg-yellow-100 text-yellow-700";
 
       case "Draft":
         return "bg-gray-100 text-gray-600";
 
-      case "Cancelled":
+      case "Withdraw":
         return "bg-red-100 text-red-700";
 
       default:
@@ -569,7 +569,7 @@ export default function ProjectDetailPage() {
               <button
                 type="button"
                 onClick={handleEdit}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
               >
                 Edit Project
               </button>
@@ -633,7 +633,7 @@ export default function ProjectDetailPage() {
                   onClick={() =>
                     setActiveTab(tab)
                   }
-                  className={`border-b-2 py-4 text-sm font-medium transition ${
+                  className={`border-b-2 py-4 text-sm font-medium transition cursor-pointer ${
                     activeTab === tab
                       ? "border-black text-black"
                       : "border-transparent text-gray-500 hover:text-gray-900"
@@ -806,8 +806,8 @@ export default function ProjectDetailPage() {
                               Completed
                             </option>
 
-                            <option value="Cancelled">
-                              Cancelled
+                            <option value="Withdraw">
+                              Withdraw
                             </option>
 
                           </select>
@@ -948,7 +948,7 @@ export default function ProjectDetailPage() {
                           setEditing(false)
                         }
                         disabled={saving}
-                        className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
                       >
                         Cancel
                       </button>
@@ -957,7 +957,7 @@ export default function ProjectDetailPage() {
                         type="button"
                         onClick={handleSave}
                         disabled={saving}
-                        className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                        className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
                       >
                         {saving
                           ? "Saving..."
@@ -1066,7 +1066,7 @@ export default function ProjectDetailPage() {
             {activeTab === "Purchase Orders" && (
               <div>
 
-                <div className="mb-5 flex items-center justify-between">
+                <div className="mb-5 flex items-center justify-between cursor-pointer">
 
                   <div>
 
@@ -1082,13 +1082,6 @@ export default function ProjectDetailPage() {
                     </p>
 
                   </div>
-
-                  <Link
-                    href={`/po/new?projectId=${id}`}
-                    className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
-                  >
-                    + New PO
-                  </Link>
 
                 </div>
 
@@ -1207,7 +1200,7 @@ export default function ProjectDetailPage() {
 
                   <div>
 
-                    <h2 className="text-base font-semibold text-gray-900">
+                    <h2 className="text-base font-semibold text-gray-900 cursor-pointer">
                       Invoices
                     </h2>
 
@@ -1219,13 +1212,6 @@ export default function ProjectDetailPage() {
                     </p>
 
                   </div>
-
-                  <Link
-                    href={`/invoices/new?projectId=${id}`}
-                    className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
-                  >
-                    + New Invoice
-                  </Link>
 
                 </div>
 

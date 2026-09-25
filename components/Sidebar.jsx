@@ -61,7 +61,7 @@ export default function Sidebar({ role }) {
     : menuItems;
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col shrink-0">
+    <aside className="w-64 bg-indigo-800 border-r border-gray-200 min-h-screen flex flex-col shrink-0">
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5">
@@ -91,8 +91,8 @@ export default function Sidebar({ role }) {
                   transition
                   ${
                     active
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      ? "bg-amber-400 text-black"
+                      : "text-gray-300 hover:bg-indigo-500 hover:text-black"
                   }
                 `}
               >
@@ -121,11 +121,11 @@ export default function Sidebar({ role }) {
 
           <div className="min-w-0">
 
-            <div className="text-sm font-medium text-gray-900">
+            <div className="text-sm font-medium text-white truncate">
               {isPOUser ? "YJ PO" : "YJ Building"}
             </div>
 
-            <div className="text-xs text-gray-500 truncate">
+            <div className="text-xs text-gray-400 truncate">
               {isPOUser ? "Purchase Orders" : "Administration"}
             </div>
 

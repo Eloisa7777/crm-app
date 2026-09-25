@@ -846,7 +846,7 @@ export default function InvoiceDetailPage() {
                 onClick={() =>
                   setEditing(true)
                 }
-                className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
               >
                 Edit
               </button>
@@ -867,7 +867,7 @@ export default function InvoiceDetailPage() {
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
                 >
                   {saving
                     ? "Saving..."
@@ -875,31 +875,6 @@ export default function InvoiceDetailPage() {
                 </button>
               </>
             )}
-
-            {/* =============================================
-                Header PDF Download
-            ============================================= */}
-
-            <PDFDownloadLink
-              document={
-                <InvoicePDF
-                  invoice={
-                    invoiceDataForPDF
-                  }
-                />
-              }
-              fileName={`${
-                form.invoiceNumber ||
-                "invoice"
-              }.pdf`}
-              className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
-            >
-              {({ loading }) =>
-                loading
-                  ? "Preparing PDF..."
-                  : "Download PDF"
-              }
-            </PDFDownloadLink>
 
           </div>
         </div>
@@ -1620,7 +1595,7 @@ export default function InvoiceDetailPage() {
                 form.invoiceNumber ||
                 "invoice"
               }.pdf`}
-              className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
             >
               {({ loading }) =>
                 loading

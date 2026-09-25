@@ -602,7 +602,7 @@ export default function NewPurchaseOrderPage() {
             <button
               type="button"
               onClick={addItem}
-              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm  text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
             >
               + Add Item
             </button>
@@ -847,7 +847,7 @@ export default function NewPurchaseOrderPage() {
             type="button"
             onClick={handleGeneratePO}
             disabled={saving || loadingSuppliers}
-            className="rounded-lg bg-black px-6 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
           >
             {saving ? "Saving..." : "Generate PO"}
           </button>

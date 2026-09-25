@@ -125,7 +125,7 @@ export default function ProjectsPage() {
       case "On Hold":
         return "bg-yellow-100 text-yellow-700";
 
-      case "Cancelled":
+      case "Withdraw":
         return "bg-red-100 text-red-700";
 
       default:
@@ -151,7 +151,7 @@ export default function ProjectsPage() {
 
           <Link
             href="/projects/new"
-            className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+            className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
           >
             + New Project
           </Link>
@@ -179,7 +179,7 @@ export default function ProjectsPage() {
               <option value="Active">Active</option>
               <option value="On Hold">On Hold</option>
               <option value="Completed">Completed</option>
-              <option value="Cancelled">Cancelled</option>
+              <option value="Withdraw">Withdraw</option>
             </select>
 
             <select

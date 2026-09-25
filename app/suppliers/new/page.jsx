@@ -276,7 +276,7 @@ export default function NewSupplierPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
             >
               {saving ? "Saving..." : "Save Supplier"}
             </button>

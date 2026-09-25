@@ -704,7 +704,7 @@ export default function PurchaseOrderDetailPage() {
                 onClick={() =>
                   setEditing(true)
                 }
-                className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
               >
                 Edit
               </button>
@@ -716,7 +716,7 @@ export default function PurchaseOrderDetailPage() {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -725,7 +725,7 @@ export default function PurchaseOrderDetailPage() {
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-lg bg-indigo-800 px-5 py-3 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:opacity-50 cursor-pointer"
                 >
                   {saving
                     ? "Saving..."
@@ -733,25 +733,6 @@ export default function PurchaseOrderDetailPage() {
                 </button>
               </>
             )}
-
-            <PDFDownloadLink
-              document={
-                <PurchaseOrderPDF
-                  data={poDataForPDF}
-                />
-              }
-              fileName={`${
-                form.poNumber ||
-                "purchase-order"
-              }.pdf`}
-              className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
-            >
-              {({ loading }) =>
-                loading
-                  ? "Preparing PDF..."
-                  : "Download PDF"
-              }
-            </PDFDownloadLink>
 
           </div>
 
@@ -1445,7 +1426,7 @@ export default function PurchaseOrderDetailPage() {
                 form.poNumber ||
                 "purchase-order"
               }.pdf`}
-              className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
             >
               {({ loading }) =>
                 loading

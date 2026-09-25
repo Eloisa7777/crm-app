@@ -435,7 +435,7 @@ export default function SupplierDetailsPage() {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
             >
               Edit Supplier
             </button>
@@ -444,7 +444,7 @@ export default function SupplierDetailsPage() {
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
+                className="rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-200 cursor-pointer"
               >
                 Cancel
               </button>
@@ -453,7 +453,7 @@ export default function SupplierDetailsPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50"
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
               >
                 {saving
                   ? "Saving..."
@@ -672,13 +672,6 @@ export default function SupplierDetailsPage() {
                 </p>
 
               </div>
-
-              <Link
-                href="/purchase-orders/new"
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
-              >
-                + New PO
-              </Link>
 
             </div>
 

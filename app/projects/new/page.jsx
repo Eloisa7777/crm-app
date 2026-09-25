@@ -272,7 +272,7 @@ const handleClientChange = (e) => {
                     <option value="Active">Active</option>
                     <option value="On Hold">On Hold</option>
                     <option value="Completed">Completed</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="Withdraw">Withdraw</option>
                   </select>
                 </div>
 
@@ -385,7 +385,7 @@ const handleClientChange = (e) => {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-amber-400 hover:text-black cursor-pointer"
               >
                 {saving ? "Creating..." : "Create Project"}
               </button>
