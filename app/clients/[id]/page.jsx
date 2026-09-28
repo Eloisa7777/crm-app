@@ -19,9 +19,11 @@ export default function ClientDetailsPage() {
   const params = useParams();
 
   const [client, setClient] = useState(null);
+  const [projects, setProjects] = useState([]);
   const [invoices, setInvoices] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
 
   const [error, setError] = useState("");
@@ -96,6 +98,53 @@ export default function ClientDetailsPage() {
     }
 
     loadClient();
+  }, [params?.id]);
+
+  /* =====================================================
+     Load Client Projects
+  ===================================================== */
+
+  useEffect(() => {
+    async function loadProjects() {
+      if (!params?.id) return;
+
+      try {
+        setLoadingProjects(true);
+
+        const projectRef = collection(
+          db,
+          "projects"
+        );
+
+        const q = query(
+          projectRef,
+          where("clientId", "==", params.id)
+        );
+
+        const snapshot = await getDocs(q);
+
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setProjects(data);
+      } catch (error) {
+        console.error(
+          "Failed to load projects:",
+          error
+        );
+
+        setError(
+          error.message ||
+            "Failed to load projects."
+        );
+      } finally {
+        setLoadingProjects(false);
+      }
+    }
+
+    loadProjects();
   }, [params?.id]);
 
   /* =====================================================
@@ -592,128 +641,262 @@ export default function ClientDetailsPage() {
           </section>
 
           {/* =================================================
-              Invoices
+              Projects + Invoices
           ================================================= */}
 
-          <section className="xl:col-span-2 bg-white border border-gray-200 rounded-xl">
+          <div className="xl:col-span-2 space-y-6">
 
-            <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
+            {/* =================================================
+                Projects
+            ================================================= */}
 
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">
-                  Invoices
-                </h2>
+            <section className="bg-white border border-gray-200 rounded-xl">
 
-                <p className="text-sm text-gray-500 mt-1">
-                  Invoices associated with this client
-                </p>
+              <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
+
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">
+                    Projects
+                  </h2>
+
+                  <p className="text-sm text-gray-500 mt-1">
+                    Projects associated with this client
+                  </p>
+                </div>
+
               </div>
 
-            </div>
+              <div className="overflow-x-auto">
 
-            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
 
-              <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-left">
 
-                <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50 text-left">
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Project
+                      </th>
 
-                    <th className="px-6 py-3 font-medium text-gray-500">
-                      Invoice Number
-                    </th>
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Type
+                      </th>
 
-                    <th className="px-6 py-3 font-medium text-gray-500">
-                      Project
-                    </th>
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Start Date
+                      </th>
 
-                    <th className="px-6 py-3 font-medium text-gray-500">
-                      Date
-                    </th>
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Contract Value
+                      </th>
 
-                    <th className="px-6 py-3 font-medium text-gray-500">
-                      Amount
-                    </th>
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Status
+                      </th>
 
-                    <th className="px-6 py-3 font-medium text-gray-500">
-                      Status
-                    </th>
-
-                  </tr>
-                </thead>
-
-                <tbody>
-
-                  {loadingInvoices ? (
-                    <tr>
-                      <td
-                        colSpan="5"
-                        className="px-6 py-10 text-center text-sm text-gray-500"
-                      >
-                        Loading invoices...
-                      </td>
                     </tr>
-                  ) : invoices.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan="5"
-                        className="px-6 py-10 text-center text-sm text-gray-500"
-                      >
-                        No invoices found.
-                      </td>
-                    </tr>
-                  ) : (
-                    invoices.map((invoice) => (
-                      <tr
-                        key={invoice.id}
-                        onClick={() =>
-                          (window.location.href =
-                            `/invoices/${invoice.id}`)
-                        }
-                        className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
-                      >
+                  </thead>
 
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">
-                            {invoice.invoiceNumber || "-"}
-                          </div>
+                  <tbody>
+
+                    {loadingProjects ? (
+                      <tr>
+                        <td
+                          colSpan="5"
+                          className="px-6 py-10 text-center text-sm text-gray-500"
+                        >
+                          Loading projects...
                         </td>
-
-                        <td className="px-6 py-4 text-gray-700">
-                          {invoice.projectName || "-"}
-                        </td>
-
-                        <td className="px-6 py-4 text-gray-500">
-                          {invoice.invoiceDate || "-"}
-                        </td>
-
-                        <td className="px-6 py-4 font-medium text-gray-900">
-                          {formatCurrency(
-                            invoice.total ??
-                              invoice.amount ??
-                              0
-                          )}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          <StatusBadge
-                            status={
-                              invoice.status ||
-                              "Draft"
-                            }
-                          />
-                        </td>
-
                       </tr>
-                    ))
-                  )}
+                    ) : projects.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="5"
+                          className="px-6 py-10 text-center text-sm text-gray-500"
+                        >
+                          No projects found.
+                        </td>
+                      </tr>
+                    ) : (
+                      projects.map((project) => (
+                        <tr
+                          key={project.id}
+                          onClick={() =>
+                            (window.location.href =
+                              `/projects/${project.id}`)
+                          }
+                          className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                        >
 
-                </tbody>
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">
+                              {project.name || "-"}
+                            </div>
 
-              </table>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {project.siteAddress || "-"}
+                            </div>
+                          </td>
 
-            </div>
+                          <td className="px-6 py-4 text-gray-700">
+                            {project.projectType || "-"}
+                          </td>
 
-          </section>
+                          <td className="px-6 py-4 text-gray-500">
+                            {project.startDate || "-"}
+                          </td>
+
+                          <td className="px-6 py-4 font-medium text-gray-900">
+                            {formatCurrency(
+                              project.contractValue ?? 0
+                            )}
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <StatusBadge
+                              status={
+                                project.status ||
+                                "Draft"
+                              }
+                            />
+                          </td>
+
+                        </tr>
+                      ))
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            </section>
+
+            {/* =================================================
+                Invoices
+            ================================================= */}
+
+            <section className="bg-white border border-gray-200 rounded-xl">
+
+              <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
+
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">
+                    Invoices
+                  </h2>
+
+                  <p className="text-sm text-gray-500 mt-1">
+                    Invoices associated with this client
+                  </p>
+                </div>
+
+              </div>
+
+              <div className="overflow-x-auto">
+
+                <table className="w-full text-sm">
+
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-left">
+
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Invoice Number
+                      </th>
+
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Project
+                      </th>
+
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Date
+                      </th>
+
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Amount
+                      </th>
+
+                      <th className="px-6 py-3 font-medium text-gray-500">
+                        Status
+                      </th>
+
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {loadingInvoices ? (
+                      <tr>
+                        <td
+                          colSpan="5"
+                          className="px-6 py-10 text-center text-sm text-gray-500"
+                        >
+                          Loading invoices...
+                        </td>
+                      </tr>
+                    ) : invoices.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="5"
+                          className="px-6 py-10 text-center text-sm text-gray-500"
+                        >
+                          No invoices found.
+                        </td>
+                      </tr>
+                    ) : (
+                      invoices.map((invoice) => (
+                        <tr
+                          key={invoice.id}
+                          onClick={() =>
+                            (window.location.href =
+                              `/invoices/${invoice.id}`)
+                          }
+                          className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer"
+                        >
+
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">
+                              {invoice.invoiceNumber || "-"}
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4 text-gray-700">
+                            {invoice.projectName || "-"}
+                          </td>
+
+                          <td className="px-6 py-4 text-gray-500">
+                            {invoice.invoiceDate || "-"}
+                          </td>
+
+                          <td className="px-6 py-4 font-medium text-gray-900">
+                            {formatCurrency(
+                              invoice.total ??
+                                invoice.amount ??
+                                0
+                            )}
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <StatusBadge
+                              status={
+                                invoice.status ||
+                                "Draft"
+                              }
+                            />
+                          </td>
+
+                        </tr>
+                      ))
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            </section>
+
+          </div>
 
         </div>
 

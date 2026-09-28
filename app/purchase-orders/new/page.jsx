@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -24,22 +25,31 @@ export default function NewPurchaseOrderPage() {
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
 
   /* =====================================================
+     Projects
+  ===================================================== */
+
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+
+  /* =====================================================
      Form
   ===================================================== */
 
-    const [form, setForm] = useState({
-      poNumber: "",
-      projectName: "",
-      status: "Draft",
-      poDate: new Date().toISOString().split("T")[0],
-      deliveryDate: "",
-      siteAddress: "",
-      scopeOfWork: "",
-      projectManager: "Eason",
-      projectManagerEmail: "eason.z@yjliningscreation.com.au",
-      siteManager: "",
-      siteManagerEmail: "",
-    });
+  const [form, setForm] = useState({
+    poNumber: "",
+    projectName: "",
+    status: "Draft",
+    poDate: new Date().toISOString().split("T")[0],
+    deliveryDate: "",
+    siteAddress: "",
+    scopeOfWork: "",
+    projectManager: "Eason",
+    projectManagerEmail: "eason.z@yjliningscreation.com.au",
+    siteManager: "",
+    siteManagerEmail: "",
+  });
 
   /* =====================================================
      Items
@@ -97,6 +107,47 @@ export default function NewPurchaseOrderPage() {
   }, []);
 
   /* =====================================================
+     Load Projects
+  ===================================================== */
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoadingProjects(true);
+        setError("");
+
+        const snapshot = await getDocs(
+          collection(db, "projects")
+        );
+
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setProjects(data);
+
+        // Select the first project by default
+        if (data.length > 0) {
+          setSelectedProjectId(data[0].id);
+
+          setForm((prev) => ({
+            ...prev,
+            projectName: data[0].projectName || "",
+          }));
+        }
+      } catch (err) {
+        console.error("Error loading projects:", err);
+        setError("Failed to load projects.");
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    loadProjects();
+  }, []);
+
+  /* =====================================================
      Selected Supplier
   ===================================================== */
 
@@ -105,6 +156,35 @@ export default function NewPurchaseOrderPage() {
       (supplier) => supplier.id === selectedSupplierId
     );
   }, [suppliers, selectedSupplierId]);
+
+  /* =====================================================
+     Selected Project
+  ===================================================== */
+
+  const selectedProject = useMemo(() => {
+    return projects.find(
+      (project) => project.id === selectedProjectId
+    );
+  }, [projects, selectedProjectId]);
+
+  /* =====================================================
+     Project Change
+  ===================================================== */
+
+  const handleProjectChange = (e) => {
+    const projectId = e.target.value;
+
+    const project = projects.find(
+      (item) => item.id === projectId
+    );
+
+    setSelectedProjectId(projectId);
+
+    setForm((prev) => ({
+      ...prev,
+      projectName: project?.projectName || "",
+    }));
+  };
 
   /* =====================================================
      Form Change
@@ -198,6 +278,11 @@ export default function NewPurchaseOrderPage() {
     try {
       setError("");
 
+      if (!selectedProject) {
+        setError("Please select a project.");
+        return;
+      }
+
       if (!selectedSupplier) {
         setError("Please select a supplier.");
         return;
@@ -211,20 +296,50 @@ export default function NewPurchaseOrderPage() {
       setSaving(true);
 
       const poData = {
+        /* ---------------------------------------------
+           PO Information
+        --------------------------------------------- */
+
         poNumber: form.poNumber.trim(),
         poDate: form.poDate,
         deliveryDate: form.deliveryDate,
-        Status: form.status,
+
+        /* ---------------------------------------------
+           Project
+           projectId = relationship
+           projectName = snapshot/display value
+        --------------------------------------------- */
+
+        projectId: selectedProject.id,
+        projectName: selectedProject.projectName || "",
+
+        /* ---------------------------------------------
+           Status
+           New PO always starts as Draft
+        --------------------------------------------- */
+
+        status: "Draft",
+
+        /* ---------------------------------------------
+           Site
+        --------------------------------------------- */
 
         siteAddress: form.siteAddress,
         scopeOfWork: form.scopeOfWork,
 
-        projectName: form.projectName,
+        /* ---------------------------------------------
+           YJ Site Contact
+        --------------------------------------------- */
+
         projectManager: form.projectManager,
         projectManagerEmail: form.projectManagerEmail,
 
         siteManager: form.siteManager,
         siteManagerEmail: form.siteManagerEmail,
+
+        /* ---------------------------------------------
+           Supplier
+        --------------------------------------------- */
 
         supplierId: selectedSupplier.id,
 
@@ -238,6 +353,10 @@ export default function NewPurchaseOrderPage() {
           address: selectedSupplier.address || "",
         },
 
+        /* ---------------------------------------------
+           Items
+        --------------------------------------------- */
+
         items: items.map((item) => {
           const qty = Number(item.qty) || 0;
           const unitPrice = Number(item.unitPrice) || 0;
@@ -250,12 +369,17 @@ export default function NewPurchaseOrderPage() {
           };
         }),
 
+        /* ---------------------------------------------
+           Totals
+        --------------------------------------------- */
+
         subtotal,
         gst,
         total,
 
-        // New PO always starts as Draft
-        status: "Draft",
+        /* ---------------------------------------------
+           Created
+        --------------------------------------------- */
 
         createdAt: serverTimestamp(),
       };
@@ -287,6 +411,8 @@ export default function NewPurchaseOrderPage() {
     poNumber: form.poNumber,
     poDate: form.poDate,
     deliveryDate: form.deliveryDate,
+
+    projectName: selectedProject?.projectName || "",
 
     siteAddress: form.siteAddress,
 
@@ -326,7 +452,7 @@ export default function NewPurchaseOrderPage() {
     gst,
     total,
 
-    status: "Issued",
+    status: "Draft",
   };
 
   /* =====================================================
@@ -369,44 +495,103 @@ export default function NewPurchaseOrderPage() {
             {error}
           </div>
         )}
+
         {/* =================================================
             PO Management
         ================================================= */}
-      <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Project Name
-          </label>
-          <input
-            type="text"
-            value={form.projectName}
-            onChange={(e) =>
-              setForm({ ...form, projectName: e.target.value })
-            }
-            className="w-full border rounded-lg px-3 py-2"
-            placeholder="Enter project name"
-          />
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Status
-          </label>
-          <select
-            value={form.status}
-            onChange={(e) =>
-              setForm({ ...form, status: e.target.value })
-            }
-            className="w-full border rounded-lg px-3 py-2"
-          >
-            <option value="Draft">Draft</option>
-            <option value="Issued">Issued</option>
-            <option value="Approved">Approved</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-        </div>
-      </section> 
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-xl font-semibold">
+            PO Management
+          </h2>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+
+            {/* Project Name */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Project Name
+              </label>
+
+              {loadingProjects ? (
+                <p className="rounded-lg border px-4 py-3 text-sm text-gray-500">
+                  Loading projects...
+                </p>
+              ) : projects.length === 0 ? (
+                <div className="rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800">
+                  No projects found.
+                </div>
+              ) : (
+                <select
+                  value={selectedProjectId}
+                  onChange={handleProjectChange}
+                  className="w-full rounded-lg border px-4 py-3"
+                >
+                  <option value="">
+                    Select project
+                  </option>
+
+                  {projects.map((project) => (
+                    <option
+                      key={project.id}
+                      value={project.id}
+                    >
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+{/*           {selectedProject && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Project ID: {selectedProject.id}
+                </p>
+            )}
+*/} 
+            </div>
+
+            {/* Status */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Status
+              </label>
+
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    status: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border px-4 py-3"
+              >
+                <option value="Draft">
+                  Draft
+                </option>
+
+                <option value="Issued">
+                  Issued
+                </option>
+
+                <option value="Approved">
+                  Approved
+                </option>
+
+                <option value="Completed">
+                  Completed
+                </option>
+
+                <option value="Cancelled">
+                  Cancelled
+                </option>
+              </select>
+            </div>
+
+          </div>
+        </section>
 
         {/* =================================================
             PO Information
@@ -594,6 +779,7 @@ export default function NewPurchaseOrderPage() {
         ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-xl font-semibold">
               Order Items
@@ -602,7 +788,7 @@ export default function NewPurchaseOrderPage() {
             <button
               type="button"
               onClick={addItem}
-              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm  text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+              className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-gray-100 transition hover:bg-amber-400 hover:text-black"
             >
               + Add Item
             </button>
@@ -715,7 +901,9 @@ export default function NewPurchaseOrderPage() {
         ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+
           <div className="mb-3 flex items-center justify-between">
+
             <h2 className="text-xl font-semibold">
               Scope of Work
             </h2>
@@ -723,6 +911,7 @@ export default function NewPurchaseOrderPage() {
             <span className="text-sm text-gray-500">
               {scopeLineCount}/20 lines
             </span>
+
           </div>
 
           <textarea
@@ -742,6 +931,7 @@ export default function NewPurchaseOrderPage() {
             placeholder="Enter scope of work..."
             className="w-full rounded-lg border px-4 py-3"
           />
+
         </section>
 
         {/* =================================================
@@ -749,6 +939,7 @@ export default function NewPurchaseOrderPage() {
         ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+
           <h2 className="mb-5 text-xl font-semibold">
             YJ Site Contact
           </h2>
@@ -816,8 +1007,9 @@ export default function NewPurchaseOrderPage() {
 
         {/* =================================================
             Trading Terms
-        ================================================= 
+        ================================================= */}
 
+        {/*
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-xl font-semibold">
             Trading Terms
@@ -829,7 +1021,8 @@ export default function NewPurchaseOrderPage() {
             of each month.
           </p>
         </section>
-*/}
+        */}
+
         {/* =================================================
             Actions
         ================================================= */}
@@ -846,8 +1039,12 @@ export default function NewPurchaseOrderPage() {
           <button
             type="button"
             onClick={handleGeneratePO}
-            disabled={saving || loadingSuppliers}
-            className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+            disabled={
+              saving ||
+              loadingSuppliers ||
+              loadingProjects
+            }
+            className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Saving..." : "Generate PO"}
           </button>
@@ -862,6 +1059,7 @@ export default function NewPurchaseOrderPage() {
           <section className="mt-10 rounded-xl bg-white p-6 shadow-sm">
 
             <div className="mb-5 flex items-center justify-between">
+
               <h2 className="text-xl font-semibold">
                 Purchase Order Preview
               </h2>
@@ -876,12 +1074,16 @@ export default function NewPurchaseOrderPage() {
                 className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
               >
                 {({ loading }) =>
-                  loading ? "Preparing PDF..." : "Download PDF"
+                  loading
+                    ? "Preparing PDF..."
+                    : "Download PDF"
                 }
               </PDFDownloadLink>
+
             </div>
 
             <div className="h-[900px] overflow-hidden rounded-lg border">
+
               <PDFViewer
                 width="100%"
                 height="100%"
@@ -891,6 +1093,7 @@ export default function NewPurchaseOrderPage() {
                   data={poDataForPDF}
                 />
               </PDFViewer>
+
             </div>
 
           </section>

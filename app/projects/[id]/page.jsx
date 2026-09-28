@@ -88,7 +88,7 @@ export default function ProjectDetailPage() {
 
         try {
           const clientsSnapshot = await getDocs(
-            collection(db, "clients")
+            collection(db, "Clients")
           );
 
           const clientsData =
@@ -98,30 +98,6 @@ export default function ProjectDetailPage() {
             }));
 
           setClients(clientsData);
-
-          /* Get actual client name from Firebase */
-
-          const client = clientsData.find(
-            (item) =>
-              item.id === projectData.clientId
-          );
-
-          if (client) {
-            projectData.clientName =
-              client.name ||
-              client.companyName ||
-              client.clientName ||
-              "";
-
-            setProject({
-              ...projectData,
-              clientName:
-                client.name ||
-                client.companyName ||
-                client.clientName ||
-                "",
-            });
-          }
         } catch (error) {
           console.error(
             "Error loading clients:",
@@ -202,24 +178,27 @@ export default function ProjectDetailPage() {
      Start Edit
   ===================================================== */
 
-  const handleEdit = () => {
-    setEditForm({
-      name: project.name || "",
-      clientId: project.clientId || "",
-      clientName: project.clientName || "",
-      projectType: project.projectType || "",
-      status: project.status || "Draft",
-      contractValue:
-        project.contractValue ?? "",
-      startDate: project.startDate || "",
-      expectedCompletion:
-        project.expectedCompletion || "",
-      siteAddress: project.siteAddress || "",
-      description: project.description || "",
-    });
+    const handleEdit = () => {
+      setEditForm({
+        name: project.name || "",
+        clientId: project.clientId || "",
+        clientName: project.clientName || "",
+        projectType: project.projectType || "",
+        status: project.status || "Active",
+        contractValue: project.contractValue ?? "",
+        startDate: project.startDate || "",
+        expectedCompletion: project.expectedCompletion || "",
+        siteAddress: project.siteAddress || "",
+        description: project.description || "",
 
-    setEditing(true);
-  };
+        projectManager: project.projectManager || "",
+        contact: project.contact || "",
+        architect: project.architect || "",
+        architectContact: project.architectContact || "",
+      });
+
+      setEditing(true);
+    };
 
   /* =====================================================
      Edit Change
@@ -301,7 +280,19 @@ export default function ProjectDetailPage() {
           editForm.expectedCompletion || "",
 
         siteAddress:
-          editForm.siteAddress.trim(),
+          editForm.siteAddress || "",
+
+        projectManager:
+          editForm.projectManager || "",
+        
+        contact:
+          editForm.contact || "",
+        
+        architect:
+          editForm.architect || "",
+
+        architectContact:
+          editForm.architectContact || "",
 
         description:
           editForm.description.trim(),
@@ -691,41 +682,33 @@ export default function ProjectDetailPage() {
                         {/* Client */}
 
                         <div>
-
                           <label className="mb-2 block text-sm font-medium text-gray-700">
                             Client
                           </label>
 
                           <select
-                            value={
-                              editForm.clientId
-                            }
-                            onChange={
-                              handleClientChange
-                            }
+                            name="clientId"
+                            value={editForm.clientId || ""}
+                            onChange={handleClientChange}
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                           >
-
                             <option value="">
                               Select Client
                             </option>
 
-                            {clients.map(
-                              (client) => (
-                                <option
-                                  key={client.id}
-                                  value={client.id}
-                                >
-                                  {client.name ||
-                                    client.companyName ||
-                                    client.clientName ||
-                                    client.id}
-                                </option>
-                              )
-                            )}
-
+                            {clients.map((client) => (
+                              <option
+                                key={client.id}
+                                value={client.id}
+                              >
+                                {client.name ||
+                                  client.companyName ||
+                                  client.clientName ||
+                                  client.clientId ||
+                                  client.id}
+                              </option>
+                            ))}
                           </select>
-
                         </div>
 
                         {/* Type */}
@@ -845,6 +828,29 @@ export default function ProjectDetailPage() {
                           </div>
 
                         </div>
+                           
+                           
+                           {/* Site */}     
+
+                          <div className="md:col-span-2">
+
+                          <label className="mb-2 block text-sm font-medium text-gray-700">
+                            Site Address
+                          </label>
+
+                          <textarea
+                            name="siteAddress"
+                            value={
+                              editForm.siteAddress
+                            }
+                            onChange={
+                              handleEditChange
+                            }
+                            rows={2}
+                            className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                          />
+
+                        </div>
 
                         {/* Start Date */}
 
@@ -890,27 +896,77 @@ export default function ProjectDetailPage() {
 
                         </div>
 
-                        {/* Site */}
+                        <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Project Manager / CA
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.projectManager}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              projectManager: e.target.value,
+                            })
+                          }
+                          placeholder="Enter project manager / CA"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                        />
+                      </div>
 
-                        <div className="md:col-span-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          PM / CA Contact
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.contact}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              contact: e.target.value,
+                            })
+                          }
+                          placeholder="Phone or email"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                        />
+                      </div>
 
-                          <label className="mb-2 block text-sm font-medium text-gray-700">
-                            Site Address
-                          </label>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Architect
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.architect}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              architect: e.target.value,
+                            })
+                          }
+                          placeholder="Enter architect"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                        />
+                      </div>
 
-                          <textarea
-                            name="siteAddress"
-                            value={
-                              editForm.siteAddress
-                            }
-                            onChange={
-                              handleEditChange
-                            }
-                            rows={2}
-                            className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
-                          />
-
-                        </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Architect Contact
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.architectContact}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              architectContact: e.target.value,
+                            })
+                          }
+                          placeholder="Phone or email"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                        />
+                      </div>
 
                         {/* Description */}
 
@@ -989,6 +1045,14 @@ export default function ProjectDetailPage() {
                           project.projectType
                         }
                       />
+                      
+                      <InfoRow
+                        label="Site Address"
+                        value={
+                          project.siteAddress ||
+                          "-"
+                        }
+                      />
 
                       <InfoRow
                         label="Status"
@@ -1020,7 +1084,7 @@ export default function ProjectDetailPage() {
 
                     </InfoSection>
 
-                    <InfoSection title="Client & Site">
+                    <InfoSection title="Client Contact">
 
                       <InfoRow
                         label="Client"
@@ -1031,9 +1095,30 @@ export default function ProjectDetailPage() {
                       />
 
                       <InfoRow
-                        label="Site Address"
+                        label="Project Manager/ CA"
                         value={
-                          project.siteAddress ||
+                          project.projectManager ||
+                          "-"
+                        }
+                      />
+                      <InfoRow
+                        label="PM/CA Contact"
+                        value={
+                          project.contact ||
+                          "-"
+                        }
+                      />
+                        <InfoRow
+                        label="Architect"
+                        value={
+                          project.architect ||
+                          "-"
+                        }
+                      />
+                        <InfoRow
+                        label="Architect Contact"
+                        value={
+                          project.architectContact ||
                           "-"
                         }
                       />
@@ -1042,7 +1127,7 @@ export default function ProjectDetailPage() {
 
                     <div className="lg:col-span-2">
 
-                      <InfoSection title="Description">
+                      <InfoSection title="Description/Notes">
 
                         <p className="whitespace-pre-wrap text-sm leading-6 text-gray-600">
                           {project.description ||

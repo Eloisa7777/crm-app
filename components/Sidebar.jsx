@@ -92,7 +92,7 @@ export default function Sidebar({ role }) {
                   ${
                     active
                       ? "bg-amber-400 text-black"
-                      : "text-gray-300 hover:bg-indigo-500 hover:text-black"
+                      : "text-gray-300 hover:bg-indigo-300 hover:text-black"
                   }
                 `}
               >

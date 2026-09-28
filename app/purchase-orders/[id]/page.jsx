@@ -1,12 +1,13 @@
-
 "use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -23,8 +24,12 @@ export default function PurchaseOrderDetailPage() {
 
   const [purchaseOrder, setPurchaseOrder] = useState(null);
 
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
   const [form, setForm] = useState({
     poNumber: "",
+    projectId: "",
     projectName: "",
     status: "Draft",
 
@@ -114,10 +119,15 @@ export default function PurchaseOrderDetailPage() {
 
         setForm({
           poNumber: data.poNumber || "",
+
+          projectId: data.projectId || "",
+
           projectName: data.projectName || "",
+
           status: data.status || "Draft",
 
           poDate: data.poDate || "",
+
           deliveryDate: data.deliveryDate || "",
 
           supplier: {
@@ -135,22 +145,18 @@ export default function PurchaseOrderDetailPage() {
             supplier.id ||
             "",
 
-          siteAddress:
-            data.siteAddress || "",
+          siteAddress: data.siteAddress || "",
 
           items,
 
-          scopeOfWork:
-            data.scopeOfWork || "",
+          scopeOfWork: data.scopeOfWork || "",
 
-          projectManager:
-            data.projectManager || "",
+          projectManager: data.projectManager || "",
 
           projectManagerEmail:
             data.projectManagerEmail || "",
 
-          siteManager:
-            data.siteManager || "",
+          siteManager: data.siteManager || "",
 
           siteManagerEmail:
             data.siteManagerEmail || "",
@@ -172,6 +178,49 @@ export default function PurchaseOrderDetailPage() {
   }, [params?.id]);
 
   /* =====================================================
+     Load Projects
+  ===================================================== */
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoadingProjects(true);
+
+        const snapshot = await getDocs(
+          collection(db, "projects")
+        );
+
+        const data = snapshot.docs.map((projectDoc) => {
+          const projectData = projectDoc.data();
+
+          return {
+            id: projectDoc.id,
+            ...projectData,
+          };
+        });
+
+        console.log("PROJECTS:", data);
+
+        setProjects(data);
+
+      } catch (err) {
+        console.error(
+          "Error loading projects:",
+          err
+        );
+
+        setError(
+          "Failed to load projects."
+        );
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    loadProjects();
+  }, []);
+
+  /* =====================================================
      Generic Form Update
   ===================================================== */
 
@@ -179,6 +228,42 @@ export default function PurchaseOrderDetailPage() {
     setForm((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  }
+
+  /* =====================================================
+     Project Update
+     
+     IMPORTANT:
+     Select value is projectId.
+     Once selected:
+       projectId   -> selected project ID
+       projectName -> selected project name
+  ===================================================== */
+
+  function handleProjectChange(e) {
+    const projectId = e.target.value;
+
+    const selectedProject = projects.find(
+      (project) =>
+        project.id === projectId
+    );
+
+    console.log(
+      "Selected project:",
+      selectedProject
+    );
+
+    setForm((prev) => ({
+      ...prev,
+
+      projectId:
+        selectedProject?.id || "",
+
+      projectName:
+        selectedProject?.projectName ||
+        selectedProject?.name ||
+        "",
     }));
   }
 
@@ -206,10 +291,7 @@ export default function PurchaseOrderDetailPage() {
 
       items[index] = {
         ...items[index],
-        [field]:
-          field === "qty" || field === "unitPrice"
-            ? value
-            : value,
+        [field]: value,
       };
 
       return {
@@ -226,6 +308,7 @@ export default function PurchaseOrderDetailPage() {
   function addItem() {
     setForm((prev) => ({
       ...prev,
+
       items: [
         ...prev.items,
         {
@@ -244,8 +327,10 @@ export default function PurchaseOrderDetailPage() {
   function removeItem(index) {
     setForm((prev) => ({
       ...prev,
+
       items: prev.items.filter(
-        (_, itemIndex) => itemIndex !== index
+        (_, itemIndex) =>
+          itemIndex !== index
       ),
     }));
   }
@@ -256,7 +341,9 @@ export default function PurchaseOrderDetailPage() {
 
   const subtotal = form.items.reduce(
     (sum, item) => {
-      const qty = Number(item.qty) || 0;
+      const qty =
+        Number(item.qty) || 0;
+
       const unitPrice =
         Number(item.unitPrice) || 0;
 
@@ -285,21 +372,80 @@ export default function PurchaseOrderDetailPage() {
         params.id
       );
 
-      const cleanItems = form.items.map(
-        (item) => {
-          const qty = Number(item.qty) || 0;
+      /* -----------------------------------------------
+         Validate Project
+      ------------------------------------------------ */
+
+      if (!form.projectId) {
+        setError(
+          "Please select a project."
+        );
+
+        setSaving(false);
+        return;
+      }
+
+      const selectedProject =
+        projects.find(
+          (project) =>
+            project.id === form.projectId
+        );
+
+      if (!selectedProject) {
+        setError(
+          "Selected project could not be found."
+        );
+
+        setSaving(false);
+        return;
+      }
+
+      /* -----------------------------------------------
+         Get Project Name
+      ------------------------------------------------ */
+
+      const selectedProjectName =
+        selectedProject.projectName ||
+        selectedProject.name ||
+        "";
+
+      if (!selectedProjectName) {
+        setError(
+          "Selected project does not have a project name."
+        );
+
+        setSaving(false);
+        return;
+      }
+
+      /* -----------------------------------------------
+         Clean Items
+      ------------------------------------------------ */
+
+      const cleanItems =
+        form.items.map((item) => {
+          const qty =
+            Number(item.qty) || 0;
+
           const unitPrice =
             Number(item.unitPrice) || 0;
 
           return {
             description:
               item.description || "",
+
             qty,
+
             unitPrice,
-            total: qty * unitPrice,
+
+            total:
+              qty * unitPrice,
           };
-        }
-      );
+        });
+
+      /* -----------------------------------------------
+         Calculate Totals
+      ------------------------------------------------ */
 
       const cleanSubtotal =
         cleanItems.reduce(
@@ -314,12 +460,27 @@ export default function PurchaseOrderDetailPage() {
       const cleanTotal =
         cleanSubtotal + cleanGst;
 
+      /* -----------------------------------------------
+         Data to Firestore
+      ------------------------------------------------ */
+
       const updatedData = {
         poNumber:
           form.poNumber.trim(),
 
+        /*
+         * IMPORTANT:
+         * Always save the actual Firestore
+         * project document ID.
+         */
+        projectId:
+          selectedProject.id,
+
+        /*
+         * Save the project name as a snapshot.
+         */
         projectName:
-          form.projectName.trim(),
+          selectedProjectName,
 
         status:
           form.status,
@@ -392,16 +553,26 @@ export default function PurchaseOrderDetailPage() {
           serverTimestamp(),
       };
 
+      console.log(
+        "Saving PO:",
+        updatedData
+      );
+
       await updateDoc(
         poRef,
         updatedData
       );
 
+      /* -----------------------------------------------
+         Update Local PO
+      ------------------------------------------------ */
+
       setPurchaseOrder((prev) => ({
         ...prev,
         ...updatedData,
 
-        items: cleanItems,
+        items:
+          cleanItems,
 
         supplier:
           updatedData.supplier,
@@ -416,9 +587,21 @@ export default function PurchaseOrderDetailPage() {
           cleanTotal,
       }));
 
+      /* -----------------------------------------------
+         Update Form
+      ------------------------------------------------ */
+
       setForm((prev) => ({
         ...prev,
-        items: cleanItems,
+
+        projectId:
+          selectedProject.id,
+
+        projectName:
+          selectedProjectName,
+
+        items:
+          cleanItems,
       }));
 
       setEditing(false);
@@ -457,19 +640,26 @@ export default function PurchaseOrderDetailPage() {
             name: data.supplier || "",
           };
 
-    const items = Array.isArray(data.items)
-      ? data.items.map((item) => ({
-          description:
-            item.description || "",
-          qty: Number(item.qty) || 0,
-          unitPrice:
-            Number(item.unitPrice) || 0,
-        }))
-      : [];
+    const items =
+      Array.isArray(data.items)
+        ? data.items.map((item) => ({
+            description:
+              item.description || "",
+
+            qty:
+              Number(item.qty) || 0,
+
+            unitPrice:
+              Number(item.unitPrice) || 0,
+          }))
+        : [];
 
     setForm({
       poNumber:
         data.poNumber || "",
+
+      projectId:
+        data.projectId || "",
 
       projectName:
         data.projectName || "",
@@ -591,9 +781,9 @@ export default function PurchaseOrderDetailPage() {
 
   /* =====================================================
      PDF Data
-     
-     IMPORTANT:
-     projectName and status are NOT included.
+
+     projectName / projectId / status
+     are NOT included in PDF.
   ===================================================== */
 
   const pdfSupplier =
@@ -690,10 +880,6 @@ export default function PurchaseOrderDetailPage() {
                 "Purchase Order"}
             </h1>
 
-            <p className="mt-1 text-sm text-gray-500">
-              PO ID: {purchaseOrder.id}
-            </p>
-
           </div>
 
           <div className="flex items-center gap-3">
@@ -704,7 +890,7 @@ export default function PurchaseOrderDetailPage() {
                 onClick={() =>
                   setEditing(true)
                 }
-                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+                className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
               >
                 Edit
               </button>
@@ -716,7 +902,7 @@ export default function PurchaseOrderDetailPage() {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer"
+                  className="cursor-pointer rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -724,8 +910,11 @@ export default function PurchaseOrderDetailPage() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving}
-                  className="rounded-lg bg-indigo-800 px-5 py-3 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:opacity-50 cursor-pointer"
+                  disabled={
+                    saving ||
+                    loadingProjects
+                  }
+                  className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-3 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:opacity-50"
                 >
                   {saving
                     ? "Saving..."
@@ -778,19 +967,63 @@ export default function PurchaseOrderDetailPage() {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            {/* Project Name */}
+            {/* Project */}
 
-            <Field
-              label="Project Name"
-              value={form.projectName}
-              editing={editing}
-              onChange={(value) =>
-                updateForm(
-                  "projectName",
-                  value
+            <div>
+
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Project Name
+              </label>
+
+              {editing ? (
+                loadingProjects ? (
+                  <div className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-gray-500">
+                    Loading projects...
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    No projects found.
+                  </div>
+                ) : (
+                  <select
+                    /*
+                     * IMPORTANT:
+                     * The select now uses projectId,
+                     * NOT projectName.
+                     */
+                    value={form.projectId}
+                    onChange={handleProjectChange}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3"
+                  >
+                    <option value="">
+                      Select project
+                    </option>
+
+                    {projects.map((project) => {
+                      const projectName =
+                        project.projectName ||
+                        project.name ||
+                        "";
+
+                      return (
+                        <option
+                          key={project.id}
+                          value={project.id}
+                        >
+                          {projectName}
+                        </option>
+                      );
+                    })}
+                  </select>
                 )
-              }
-            />
+              ) : (
+                <div className="rounded-lg bg-gray-50 px-4 py-3">
+                  {form.projectName ||
+                    "-"}
+                </div>
+              )}
+
+            </div>
 
             {/* Status */}
 
@@ -1027,7 +1260,7 @@ export default function PurchaseOrderDetailPage() {
                 )
               }
               rows={4}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 resize-none"
+              className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3"
               placeholder="Enter site address"
             />
           ) : (
@@ -1313,7 +1546,7 @@ export default function PurchaseOrderDetailPage() {
                 )
               }
               rows={8}
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 resize-none"
+              className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3"
               placeholder="Enter scope of work"
             />
           ) : (
@@ -1426,7 +1659,7 @@ export default function PurchaseOrderDetailPage() {
                 form.poNumber ||
                 "purchase-order"
               }.pdf`}
-              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+              className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
             >
               {({ loading }) =>
                 loading
@@ -1457,7 +1690,6 @@ export default function PurchaseOrderDetailPage() {
     </div>
   );
 }
-
 
 /* =====================================================
    Reusable Field
