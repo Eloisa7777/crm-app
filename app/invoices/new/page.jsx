@@ -40,16 +40,43 @@ export default function NewInvoicePage() {
 
         setClients(data);
       } catch (error) {
-        console.error(
-          "Failed to load clients:",
-          error
-        );
+        console.error("Failed to load clients:", error);
       } finally {
         setLoadingClients(false);
       }
     }
 
     loadClients();
+  }, []);
+
+  /* =====================================================
+     Projects
+  ===================================================== */
+
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const snapshot = await getDocs(
+          collection(db, "projects")
+        );
+
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setProjects(data);
+      } catch (error) {
+        console.error("Failed to load projects:", error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    }
+
+    loadProjects();
   }, []);
 
   /* =====================================================
@@ -68,7 +95,9 @@ export default function NewInvoicePage() {
     clientName: "",
     clientAddress: "",
 
+    projectId: "",
     projectName: "",
+
     poNumber: "",
 
     notes: "",
@@ -87,7 +116,7 @@ export default function NewInvoicePage() {
       description: "",
       qty: 1,
       unitPrice: "",
-      Tax: 0,
+      tax: 0,
     },
   ]);
 
@@ -110,6 +139,27 @@ export default function NewInvoicePage() {
 
       clientAddress:
         client?.address || "",
+    }));
+  }
+
+  /* =====================================================
+     Select Project
+  ===================================================== */
+
+  function handleProjectChange(projectId) {
+    const project = projects.find(
+      (item) => item.id === projectId
+    );
+
+    setForm((prev) => ({
+      ...prev,
+
+      projectId,
+
+      projectName:
+        project?.projectName ||
+        project?.name ||
+        "",
     }));
   }
 
@@ -157,7 +207,7 @@ export default function NewInvoicePage() {
         description: "",
         qty: 1,
         unitPrice: "",
-        Tax: 0,
+        tax: 0,
       },
     ]);
   }
@@ -190,7 +240,10 @@ export default function NewInvoicePage() {
         qty,
         unitPrice,
         tax,
-        total: qty * unitPrice * (1 + tax / 100),
+        total:
+          qty *
+          unitPrice *
+          (1 + tax / 100),
       };
     });
   }, [items]);
@@ -237,6 +290,13 @@ export default function NewInvoicePage() {
       return;
     }
 
+    if (!form.projectId) {
+      setError(
+        "Please select a project."
+      );
+      return;
+    }
+
     if (!form.invoiceDate) {
       setError(
         "Please select an invoice date."
@@ -252,6 +312,13 @@ export default function NewInvoicePage() {
           (client) =>
             client.id ===
             form.clientId
+        );
+
+      const selectedProject =
+        projects.find(
+          (project) =>
+            project.id ===
+            form.projectId
         );
 
       const clientData =
@@ -300,6 +367,12 @@ export default function NewInvoicePage() {
                 "",
             };
 
+      const projectName =
+        selectedProject?.projectName ||
+        selectedProject?.name ||
+        form.projectName ||
+        "";
+
       const invoiceData = {
         invoiceNumber:
           form.invoiceNumber.trim(),
@@ -326,8 +399,11 @@ export default function NewInvoicePage() {
 
         /* Project */
 
+        projectId:
+          form.projectId,
+
         projectName:
-          form.projectName,
+          projectName.trim(),
 
         clientAddress:
           form.clientAddress,
@@ -807,24 +883,64 @@ export default function NewInvoicePage() {
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
+              {/* Project Select */}
+
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
                   Project Name (Reference)
                 </label>
 
-                <input
-                  type="text"
-                  name="projectName"
-                  value={
-                    form.projectName
-                  }
-                  onChange={
-                    handleChange
-                  }
-                  placeholder="Project name (reference)"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
-                />
+                {loadingProjects ? (
+                  <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                    Loading projects...
+                  </p>
+                ) : projects.length === 0 ? (
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+                    No projects found.
+                  </div>
+                ) : (
+                  <select
+                    value={
+                      form.projectId
+                    }
+                    onChange={(e) =>
+                      handleProjectChange(
+                        e.target.value
+                      )
+                    }
+                    className="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-black focus:ring-1 focus:ring-black"
+                  >
+                    <option value="">
+                      Select project
+                    </option>
+
+                    {projects.map(
+                      (project) => {
+                        const projectName =
+                          project.projectName ||
+                          project.name ||
+                          "";
+
+                        return (
+                          <option
+                            key={
+                              project.id
+                            }
+                            value={
+                              project.id
+                            }
+                          >
+                            {projectName ||
+                              "Unnamed Project"}
+                          </option>
+                        );
+                      }
+                    )}
+                  </select>
+                )}
               </div>
+
+              {/* PO Number */}
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -925,8 +1041,7 @@ export default function NewInvoicePage() {
                               updateItem(
                                 index,
                                 "description",
-                                e.target
-                                  .value
+                                e.target.value
                               )
                             }
                             placeholder="Description"
@@ -948,8 +1063,7 @@ export default function NewInvoicePage() {
                               updateItem(
                                 index,
                                 "qty",
-                                e.target
-                                  .value
+                                e.target.value
                               )
                             }
                             className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
@@ -970,8 +1084,7 @@ export default function NewInvoicePage() {
                               updateItem(
                                 index,
                                 "unitPrice",
-                                e.target
-                                  .value
+                                e.target.value
                               )
                             }
                             placeholder=" "
@@ -983,7 +1096,7 @@ export default function NewInvoicePage() {
                         <td className="py-3 pr-3">
 
                           <input
-                            type="percent"
+                            type="number"
                             min="0"
                             step="0.1"
                             value={
@@ -993,8 +1106,7 @@ export default function NewInvoicePage() {
                               updateItem(
                                 index,
                                 "tax",
-                                e.target
-                                  .value
+                                e.target.value
                               )
                             }
                             className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
@@ -1017,8 +1129,7 @@ export default function NewInvoicePage() {
 
                         <td className="py-3">
 
-                          {items.length >
-                            1 && (
+                          {items.length > 1 && (
                             <button
                               type="button"
                               onClick={() =>
@@ -1227,7 +1338,9 @@ export default function NewInvoicePage() {
                 handleSave
               }
               disabled={
-                saving
+                saving ||
+                loadingProjects ||
+                loadingClients
               }
               className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >

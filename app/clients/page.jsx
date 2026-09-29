@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -39,7 +40,6 @@ export default function ClientsPage() {
             phone: client.phone || "-",
             address: client.address || "-",
             status: client.status || "Active",
-            // Temporary for MVP
             orders: client.orders || 0,
             total: client.total || 0,
           };
@@ -119,7 +119,7 @@ export default function ClientsPage() {
             </h1>
 
             <p className="text-sm text-gray-500 mt-1">
-              Manage your clients and subcontractors
+              Manage your clients
             </p>
           </div>
         </header>
@@ -200,35 +200,7 @@ export default function ClientsPage() {
         </div>
 
 
-        {/* Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-
-          <SummaryCard
-            title="Total Clients"
-            value={clients.length}
-          />
-
-          <SummaryCard
-            title="Active Clients"
-            value={clients.filter(
-              (client) => client.status === "Active"
-            ).length}
-          />
-
-          <SummaryCard
-            title="Total PO Value"
-            value={formatCurrency(
-              clients.reduce(
-                (sum, client) => sum + client.total,
-                0
-              )
-            )}
-          />
-
-        </div>
-
-
-        {/* Table */}
+        {/* Client Table */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
           <div className="px-6 py-5 border-b border-gray-200">
@@ -362,27 +334,6 @@ export default function ClientsPage() {
 
 
 /* =========================
-   Summary Card
-========================= */
-
-function SummaryCard({ title, value }) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
-
-      <div className="text-sm text-gray-500">
-        {title}
-      </div>
-
-      <div className="text-2xl font-semibold text-gray-900 mt-2">
-        {value}
-      </div>
-
-    </div>
-  );
-}
-
-
-/* =========================
    Status Badge
 ========================= */
 
@@ -403,14 +354,3 @@ function StatusBadge({ status }) {
   );
 }
 
-
-/* =========================
-   Currency
-========================= */
-
-function formatCurrency(value) {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-  }).format(value);
-}

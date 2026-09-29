@@ -34,16 +34,6 @@ const menuItems = [
     href: "/invoices",
     icon: "▤",
   },
-  {
-    name: "Reports",
-    href: "/reports",
-    icon: "▥",
-  },
-  {
-    name: "Settings",
-    href: "/settings",
-    icon: "⚙",
-  },
 ];
 
 export default function Sidebar({ role }) {

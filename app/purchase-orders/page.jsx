@@ -1,7 +1,10 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
+
 import { db } from "@/lib/firebase";
 
 function formatCurrency(value) {
@@ -12,6 +15,8 @@ function formatCurrency(value) {
 }
 
 export default function PurchaseOrdersPage() {
+  const router = useRouter();
+
   const [purchaseOrders, setPurchaseOrders] = useState([]);
 
   const [search, setSearch] = useState("");
@@ -45,7 +50,7 @@ export default function PurchaseOrdersPage() {
 
             project: po.projectName || "",
 
-            date: po.date || "",
+            date: po.poDate || "",
 
             deliveryDate: po.deliveryDate || "",
 
@@ -63,6 +68,7 @@ export default function PurchaseOrdersPage() {
         setPurchaseOrders(data);
       } catch (err) {
         console.error("Firebase PO error:", err);
+
         setError(
           err.message || "Failed to load purchase orders."
         );
@@ -75,16 +81,12 @@ export default function PurchaseOrdersPage() {
   }, []);
 
   const filteredPOs = purchaseOrders.filter((po) => {
+    const searchText = search.toLowerCase();
+
     const matchesSearch =
-      po.poNumber
-        .toLowerCase()
-        .includes(search.toLowerCase()) ||
-      po.supplier
-        .toLowerCase()
-        .includes(search.toLowerCase()) ||
-      po.project
-        .toLowerCase()
-        .includes(search.toLowerCase());
+      po.poNumber.toLowerCase().includes(searchText) ||
+      po.supplier.toLowerCase().includes(searchText) ||
+      po.project.toLowerCase().includes(searchText);
 
     const matchesStatus =
       status === "All" || po.status === status;
@@ -95,7 +97,10 @@ export default function PurchaseOrdersPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
 
-      {/* Header */}
+      {/* =================================================
+          Header
+      ================================================= */}
+
       <div className="flex items-center justify-between mb-8">
 
         <div>
@@ -109,10 +114,7 @@ export default function PurchaseOrdersPage() {
         </div>
 
         <button
-          onClick={() => {
-            window.location.href =
-              "/purchase-orders/new";
-          }}
+          onClick={() => router.push("/purchase-orders/new")}
           className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
         >
           + New PO
@@ -121,7 +123,10 @@ export default function PurchaseOrdersPage() {
       </div>
 
 
-      {/* Filters */}
+      {/* =================================================
+          Filters
+      ================================================= */}
+
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
 
         <div className="flex gap-3">
@@ -130,17 +135,13 @@ export default function PurchaseOrdersPage() {
             type="text"
             placeholder="Search PO, supplier or project..."
             value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
+            onChange={(e) => setSearch(e.target.value)}
             className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gray-200"
           />
 
           <select
             value={status}
-            onChange={(e) =>
-              setStatus(e.target.value)
-            }
+            onChange={(e) => setStatus(e.target.value)}
             className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm bg-white"
           >
             <option value="All">
@@ -169,7 +170,10 @@ export default function PurchaseOrdersPage() {
       </div>
 
 
-      {/* Error */}
+      {/* =================================================
+          Error
+      ================================================= */}
+
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
           <p className="text-sm text-red-600">
@@ -179,7 +183,10 @@ export default function PurchaseOrdersPage() {
       )}
 
 
-      {/* PO Table */}
+      {/* =================================================
+          PO Table
+      ================================================= */}
+
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
         <table className="w-full">
@@ -219,6 +226,8 @@ export default function PurchaseOrdersPage() {
 
           <tbody className="divide-y divide-gray-100">
 
+            {/* Loading */}
+
             {loading && (
               <tr>
                 <td
@@ -231,17 +240,20 @@ export default function PurchaseOrdersPage() {
             )}
 
 
+            {/* Data */}
+
             {!loading &&
               filteredPOs.map((po) => (
 
                 <tr
                   key={po.id}
                   onClick={() =>
-                    (window.location.href =
-                      `/purchase-orders/${po.id}`)
+                    router.push(`/purchase-orders/${po.id}`)
                   }
                   className="hover:bg-gray-50 cursor-pointer transition"
                 >
+
+                  {/* PO Number */}
 
                   <td className="px-6 py-4">
 
@@ -252,25 +264,35 @@ export default function PurchaseOrdersPage() {
                   </td>
 
 
+                  {/* Supplier */}
+
                   <td className="px-6 py-4 text-sm text-gray-700">
                     {po.supplier}
                   </td>
 
+
+                  {/* Project */}
 
                   <td className="px-6 py-4 text-sm text-gray-700">
                     {po.project}
                   </td>
 
 
+                  {/* PO Date */}
+
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {po.date}
                   </td>
 
 
+                  {/* Amount */}
+
                   <td className="px-6 py-4 text-right text-sm font-medium text-gray-900">
                     {formatCurrency(po.amount)}
                   </td>
 
+
+                  {/* Status */}
 
                   <td className="px-6 py-4 text-center">
 
@@ -284,6 +306,8 @@ export default function PurchaseOrdersPage() {
 
               ))}
 
+
+            {/* Empty */}
 
             {!loading &&
               filteredPOs.length === 0 && (
@@ -312,6 +336,10 @@ export default function PurchaseOrdersPage() {
 }
 
 
+/* =================================================
+   Status Badge
+================================================= */
+
 function StatusBadge({ status }) {
 
   const styles = {
@@ -338,3 +366,4 @@ function StatusBadge({ status }) {
     </span>
   );
 }
+

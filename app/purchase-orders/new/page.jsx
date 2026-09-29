@@ -21,7 +21,6 @@ export default function NewPurchaseOrderPage() {
 
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
-
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
 
   /* =====================================================
@@ -30,7 +29,6 @@ export default function NewPurchaseOrderPage() {
 
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
-
   const [selectedProjectId, setSelectedProjectId] = useState("");
 
   /* =====================================================
@@ -39,7 +37,7 @@ export default function NewPurchaseOrderPage() {
 
   const [form, setForm] = useState({
     poNumber: "",
-    projectName: "",
+    projectName: "Select project",
     status: "Draft",
     poDate: new Date().toISOString().split("T")[0],
     deliveryDate: "",
@@ -127,15 +125,15 @@ export default function NewPurchaseOrderPage() {
 
         setProjects(data);
 
-        // Select the first project by default
+        // Select
         if (data.length > 0) {
-          setSelectedProjectId(data[0].id);
+        setSelectedProjectId("");
 
-          setForm((prev) => ({
-            ...prev,
-            projectName: data[0].projectName || "",
-          }));
-        }
+        setForm((prev) => ({
+          ...prev,
+          projectName: data[0].name || data[0].projectName || "",
+        }));
+      }
       } catch (err) {
         console.error("Error loading projects:", err);
         setError("Failed to load projects.");
@@ -171,20 +169,20 @@ export default function NewPurchaseOrderPage() {
      Project Change
   ===================================================== */
 
-  const handleProjectChange = (e) => {
-    const projectId = e.target.value;
+    const handleProjectChange = (e) => {
+      const projectId = e.target.value;
 
-    const project = projects.find(
-      (item) => item.id === projectId
-    );
+      const project = projects.find(
+        (item) => item.id === projectId
+      );
 
-    setSelectedProjectId(projectId);
+      setSelectedProjectId(projectId);
 
-    setForm((prev) => ({
-      ...prev,
-      projectName: project?.projectName || "",
-    }));
-  };
+      setForm((prev) => ({
+        ...prev,
+        projectName: project?.name || "",
+      }));
+    };
 
   /* =====================================================
      Form Change
@@ -299,7 +297,6 @@ export default function NewPurchaseOrderPage() {
         /* ---------------------------------------------
            PO Information
         --------------------------------------------- */
-
         poNumber: form.poNumber.trim(),
         poDate: form.poDate,
         deliveryDate: form.deliveryDate,
@@ -309,37 +306,18 @@ export default function NewPurchaseOrderPage() {
            projectId = relationship
            projectName = snapshot/display value
         --------------------------------------------- */
-
         projectId: selectedProject.id,
-        projectName: selectedProject.projectName || "",
-
-        /* ---------------------------------------------
-           Status
-           New PO always starts as Draft
-        --------------------------------------------- */
-
+        projectName: selectedProject.name || "",
         status: "Draft",
-
-        /* ---------------------------------------------
-           Site
-        --------------------------------------------- */
 
         siteAddress: form.siteAddress,
         scopeOfWork: form.scopeOfWork,
-
-        /* ---------------------------------------------
-           YJ Site Contact
-        --------------------------------------------- */
 
         projectManager: form.projectManager,
         projectManagerEmail: form.projectManagerEmail,
 
         siteManager: form.siteManager,
         siteManagerEmail: form.siteManagerEmail,
-
-        /* ---------------------------------------------
-           Supplier
-        --------------------------------------------- */
 
         supplierId: selectedSupplier.id,
 
@@ -412,7 +390,7 @@ export default function NewPurchaseOrderPage() {
     poDate: form.poDate,
     deliveryDate: form.deliveryDate,
 
-    projectName: selectedProject?.projectName || "",
+    projectName: selectedProject?.name || "",
 
     siteAddress: form.siteAddress,
 

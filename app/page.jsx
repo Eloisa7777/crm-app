@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -17,16 +16,33 @@ export default function HomePage() {
   const [outstandingInvoices, setOutstandingInvoices] = useState(0);
   const [receivableAmount, setReceivableAmount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState(0);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
         // =========================
+        // Active Projects
+        // =========================
+        const projectsQuery = query(
+          collection(db, "projects"),
+          where("status", "==", "Active")
+        );
+
+        const projectsSnapshot = await getCountFromServer(
+          projectsQuery
+        );
+
+        // =========================
         // Purchase Orders
         // =========================
         const purchaseOrderQuery = query(
           collection(db, "purchaseOrders"),
-          where("status", "in", ["Issued", "Completed"])
+          where("status", "in", [
+            "Issued",
+            "Draft",
+            "Approved",
+          ])
         );
 
         const poSnapshot = await getCountFromServer(
@@ -38,7 +54,10 @@ export default function HomePage() {
         // =========================
         const invoiceQuery = query(
           collection(db, "invoices"),
-          where("status", "==", "Issued")
+          where("status", "in", [
+            "Issued",
+            "Overdue",
+          ])
         );
 
         const invoiceSnapshot = await getDocs(
@@ -61,6 +80,10 @@ export default function HomePage() {
         // =========================
         // Set dashboard values
         // =========================
+        setProjects(
+          projectsSnapshot.data().count
+        );
+
         setPurchaseOrders(
           poSnapshot.data().count
         );
@@ -84,7 +107,6 @@ export default function HomePage() {
 
     loadDashboard();
   }, []);
-
 
   return (
     <div className="min-h-screen">
@@ -111,7 +133,6 @@ export default function HomePage() {
 
       </header>
 
-
       {/* Content */}
       <div className="p-8">
 
@@ -120,38 +141,39 @@ export default function HomePage() {
           {/* Active Projects */}
           <DashboardCard
             title="Active Projects"
-            value="-"
+            value={
+              loading
+                ? "—"
+                : projects
+            }
             description="Currently in progress"
           />
 
-
           {/* Purchase Orders */}
           <DashboardCard
-            title="Purchase Orders"
+            title="Outstanding Purchase Orders"
             value={
               loading
                 ? "—"
                 : purchaseOrders
             }
-            description="Total purchase orders made"
+            description="Incomplete Purchase Orders"
           />
 
-
-          {/* Invoices Issued */}
+          {/* Unpaid Invoices */}
           <DashboardCard
-            title="Invoices Issued"
+            title="Unpaid Invoices"
             value={
               loading
                 ? "—"
                 : outstandingInvoices
             }
-            description="Total invoices issued"
+            description="Invoices awaiting payment"
           />
 
-
-          {/* Invoices Outstanding */}
+          {/* Outstanding Amount */}
           <DashboardCard
-            title="Invoices Outstanding"
+            title="Outstanding Invoices"
             value={
               loading
                 ? "—"
@@ -173,7 +195,6 @@ export default function HomePage() {
     </div>
   );
 }
-
 
 function DashboardCard({
   title,

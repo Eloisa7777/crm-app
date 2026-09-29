@@ -14,6 +14,7 @@ import { db } from "@/lib/firebase";
 
 export default function NewProjectPage() {
   const router = useRouter();
+
   const [clients, setClients] = useState([]);
   const [loadingClients, setLoadingClients] = useState(true);
 
@@ -26,10 +27,6 @@ export default function NewProjectPage() {
     contractValue: "",
     startDate: "",
     expectedCompletion: "",
-    projectManager: "",
-    contact: "",
-    architect: "",
-    architectContact: "",
     siteAddress: "",
     description: "",
   });
@@ -70,19 +67,20 @@ export default function NewProjectPage() {
     }));
   };
 
-const handleProjectChange = (e) => {
-  const projectId = e.target.value;
+const handleClientChange = (e) => {
+  const clientId = e.target.value;
 
-  const project = projects.find(
-    (item) => item.id === projectId
+  const client = clients.find(
+    (item) => item.id === clientId
   );
 
   setForm((prev) => ({
     ...prev,
-    projectId,
-    projectName:
-      project?.name ||
-      project?.projectName ||
+    clientId,
+    clientName:
+      client?.name ||
+      client?.companyName ||
+      client?.clientName ||
       "",
   }));
 };
@@ -101,11 +99,7 @@ const handleProjectChange = (e) => {
 
     try {
       const projectData = {
-        projectId: selectedProject?.id || "",
-        projectName:
-          selectedProject?.name ||
-          selectedProject?.projectName ||
-          "",
+        name: form.name.trim(),
 
         clientId: form.clientId || "",
         clientName: form.clientName || "",
@@ -121,15 +115,6 @@ const handleProjectChange = (e) => {
         startDate: form.startDate || "",
         expectedCompletion:
           form.expectedCompletion || "",
-
-        projectManager:
-          form.projectManager || "",
-        contact:
-          form.contact || "",
-        architect:
-          form.architect || "",
-        architectContact:
-          form.architectContact || "",
 
         siteAddress:
           form.siteAddress.trim(),
@@ -361,62 +346,6 @@ const handleProjectChange = (e) => {
                   />
                 </div>
 
-                {/* Contact */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Project Manager / CA
-                  </label>
-                  <input
-                    type="text"
-                    name="projectManager"
-                    value={form.projectManager}
-                    onChange={handleChange}
-                    placeholder="Enter project manager / CA"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    PM / CA Contact
-                  </label>
-                  <input
-                    type="text"
-                    name="contact"
-                    value={form.contact}
-                    onChange={handleChange}
-                    placeholder="Phone or email"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Architect
-                  </label>
-                  <input
-                    type="text"
-                    name="architect"
-                    value={form.architect}
-                    onChange={handleChange}
-                    placeholder="Enter architect"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Architect Contact
-                  </label>
-                  <input
-                    type="text"
-                    name="architectContact"
-                    value={form.architectContact}
-                    onChange={handleChange}
-                    placeholder="Phone or email"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                  />
-                </div>
                 {/* Description */}
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-sm font-medium text-gray-700">

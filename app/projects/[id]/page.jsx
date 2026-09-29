@@ -109,30 +109,24 @@ export default function ProjectDetailPage() {
            Purchase Orders
         ========================= */
 
-        try {
-          const poQuery = query(
-            collection(db, "po"),
-            where("projectId", "==", id)
-          );
+try {
+  const poQuery = query(
+    collection(db, "purchaseOrders"),
+    where("projectId", "==", id)
+  );
 
-          const poSnapshot = await getDocs(
-            poQuery
-          );
+  const poSnapshot = await getDocs(poQuery);
 
-          setPurchaseOrders(
-            poSnapshot.docs.map((item) => ({
-              id: item.id,
-              ...item.data(),
-            }))
-          );
-        } catch (error) {
-          console.error(
-            "Error loading PO:",
-            error
-          );
-
-          setPurchaseOrders([]);
-        }
+  setPurchaseOrders(
+    poSnapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    }))
+  );
+} catch (error) {
+  console.error("Error loading PO:", error);
+  setPurchaseOrders([]);
+}
 
         /* =========================
            Invoices
@@ -1221,18 +1215,18 @@ export default function ProjectDetailPage() {
                               <td className="py-4 pr-4 font-medium text-gray-900">
                                 {po.poNumber ||
                                   po.number ||
-                                  po.id}
+                                  po.id||
+                                  "-"}
                               </td>
 
                               <td className="py-4 pr-4 text-gray-600">
-                                {po.supplierName ||
-                                  po.supplier ||
+                                {po.supplier?.name ||
                                   "-"}
                               </td>
 
                               <td className="py-4 pr-4 text-gray-600">
                                 {formatDate(
-                                  po.date ||
+                                  po.poDate ||
                                     po.createdAt
                                 )}
                               </td>

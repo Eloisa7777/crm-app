@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -8,6 +9,8 @@ import {
   getDoc,
   updateDoc,
   serverTimestamp,
+  collection,
+  getDocs,
 } from "firebase/firestore";
 
 import {
@@ -24,12 +27,48 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState(null);
 
   /* =====================================================
+     Projects
+  ===================================================== */
+
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const snapshot = await getDocs(
+          collection(db, "projects")
+        );
+
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setProjects(data);
+      } catch (error) {
+        console.error(
+          "Failed to load projects:",
+          error
+        );
+      } finally {
+        setLoadingProjects(false);
+      }
+    }
+
+    loadProjects();
+  }, []);
+
+  /* =====================================================
      Form
   ===================================================== */
 
   const [form, setForm] = useState({
     invoiceNumber: "",
+
+    projectId: "",
     projectName: "",
+
     status: "Draft",
 
     invoiceDate: "",
@@ -123,6 +162,7 @@ export default function InvoiceDetailPage() {
 
               unitPrice:
                 Number(item?.unitPrice) || 0,
+
               tax:
                 Number(item?.tax) || 0,
             }))
@@ -135,6 +175,16 @@ export default function InvoiceDetailPage() {
         setForm({
           invoiceNumber:
             data.invoiceNumber || "",
+
+          /*
+             New invoices:
+             projectId + projectName
+
+             Old invoices:
+             projectName only
+          */
+          projectId:
+            data.projectId || "",
 
           projectName:
             data.projectName || "",
@@ -186,16 +236,13 @@ export default function InvoiceDetailPage() {
           notes:
             data.notes || "",
 
-          /* New field */
           accountManager:
             data.accountManager ||
-            /* Old field fallback */
             data.projectManager ||
             "",
 
           accountManagerEmail:
             data.accountManagerEmail ||
-            /* Old field fallback */
             data.projectManagerEmail ||
             "",
         });
@@ -225,6 +272,29 @@ export default function InvoiceDetailPage() {
     setForm((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  }
+
+  /* =====================================================
+     Project Update
+  ===================================================== */
+
+  function handleProjectChange(projectId) {
+    const project = projects.find(
+      (item) => item.id === projectId
+    );
+
+    const projectName =
+      project?.projectName ||
+      project?.name ||
+      "";
+
+    setForm((prev) => ({
+      ...prev,
+
+      projectId,
+
+      projectName,
     }));
   }
 
@@ -312,11 +382,14 @@ export default function InvoiceDetailPage() {
         const unitPrice =
           Number(item?.unitPrice) || 0;
 
-        const tax = Number(item?.tax) || 0;
+        const tax =
+          Number(item?.tax) || 0;
 
         return (
           sum +
-          qty * unitPrice * (1 + tax / 100)
+          qty *
+            unitPrice *
+            (1 + tax / 100)
         );
       },
       0
@@ -343,7 +416,8 @@ export default function InvoiceDetailPage() {
       const unitPrice =
         Number(item?.unitPrice) || 0;
 
-      const tax = Number(item?.tax) || 0;
+      const tax =
+        Number(item?.tax) || 0;
 
       return {
         description:
@@ -356,7 +430,9 @@ export default function InvoiceDetailPage() {
         tax,
 
         total:
-          qty * unitPrice * (1 + tax / 100),
+          qty *
+          unitPrice *
+          (1 + tax / 100),
       };
     });
   }, [form.items]);
@@ -379,7 +455,6 @@ export default function InvoiceDetailPage() {
       status:
         form.status || "Draft",
 
-      /* Reference = Project Name */
       projectName:
         form.projectName || "",
 
@@ -446,6 +521,12 @@ export default function InvoiceDetailPage() {
         );
       }
 
+      if (!form.projectId) {
+        throw new Error(
+          "Please select a project."
+        );
+      }
+
       const invoiceRef = doc(
         db,
         "invoices",
@@ -464,7 +545,8 @@ export default function InvoiceDetailPage() {
           const unitPrice =
             Number(item?.unitPrice) || 0;
 
-          const tax = Number(item?.tax) || 0;
+          const tax =
+            Number(item?.tax) || 0;
 
           return {
             description:
@@ -477,7 +559,9 @@ export default function InvoiceDetailPage() {
             tax,
 
             total:
-              qty * unitPrice * (1 + tax / 100),
+              qty *
+              unitPrice *
+              (1 + tax / 100),
           };
         });
 
@@ -526,6 +610,23 @@ export default function InvoiceDetailPage() {
       };
 
       /* -----------------------------------------------
+         Project
+      ----------------------------------------------- */
+
+      const selectedProject =
+        projects.find(
+          (project) =>
+            project.id ===
+            form.projectId
+        );
+
+      const projectName =
+        selectedProject?.projectName ||
+        selectedProject?.name ||
+        form.projectName ||
+        "";
+
+      /* -----------------------------------------------
          Updated Data
       ----------------------------------------------- */
 
@@ -533,8 +634,11 @@ export default function InvoiceDetailPage() {
         invoiceNumber:
           form.invoiceNumber?.trim() || "",
 
+        projectId:
+          form.projectId || "",
+
         projectName:
-          form.projectName?.trim() || "",
+          projectName.trim(),
 
         status:
           form.status || "Draft",
@@ -562,7 +666,6 @@ export default function InvoiceDetailPage() {
         notes:
           form.notes || "",
 
-        /* New standard fields */
         accountManager:
           form.accountManager || "",
 
@@ -622,6 +725,12 @@ export default function InvoiceDetailPage() {
       setForm((prev) => ({
         ...prev,
 
+        projectId:
+          form.projectId,
+
+        projectName:
+          projectName,
+
         items:
           cleanItems,
 
@@ -679,12 +788,18 @@ export default function InvoiceDetailPage() {
 
             unitPrice:
               Number(item?.unitPrice) || 0,
+
+            tax:
+              Number(item?.tax) || 0,
           }))
         : [];
 
     setForm({
       invoiceNumber:
         data.invoiceNumber || "",
+
+      projectId:
+        data.projectId || "",
 
       projectName:
         data.projectName || "",
@@ -866,7 +981,10 @@ export default function InvoiceDetailPage() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={
+                    saving ||
+                    loadingProjects
+                  }
                   className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
                 >
                   {saving
@@ -879,7 +997,6 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
 
-
         {/* =================================================
             Saved Message
         ================================================= */}
@@ -890,7 +1007,6 @@ export default function InvoiceDetailPage() {
           </div>
         )}
 
-
         {/* =================================================
             Error
         ================================================= */}
@@ -900,7 +1016,6 @@ export default function InvoiceDetailPage() {
             {error}
           </div>
         )}
-
 
         {/* =================================================
             Invoice Management
@@ -922,19 +1037,75 @@ export default function InvoiceDetailPage() {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            <Field
-              label="Project Name (Reference)"
-              value={
-                form.projectName
-              }
-              editing={editing}
-              onChange={(value) =>
-                updateForm(
-                  "projectName",
-                  value
+            {/* Project */}
+
+            <div>
+
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Project Name (Reference)
+              </label>
+
+              {editing ? (
+                loadingProjects ? (
+                  <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                    Loading projects...
+                  </p>
+                ) : projects.length === 0 ? (
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                    No projects found.
+                  </div>
+                ) : (
+                  <select
+                    value={
+                      form.projectId
+                    }
+                    onChange={(e) =>
+                      handleProjectChange(
+                        e.target.value
+                      )
+                    }
+                    className="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-black focus:ring-1 focus:ring-black"
+                  >
+
+                    <option value="">
+                      Select project
+                    </option>
+
+                    {projects.map(
+                      (project) => {
+                        const projectName =
+                          project.projectName ||
+                          project.name ||
+                          "";
+
+                        return (
+                          <option
+                            key={
+                              project.id
+                            }
+                            value={
+                              project.id
+                            }
+                          >
+                            {projectName ||
+                              "Unnamed Project"}
+                          </option>
+                        );
+                      }
+                    )}
+
+                  </select>
                 )
-              }
-            />
+              ) : (
+                <p className="rounded-lg bg-gray-50 px-4 py-3">
+                  {form.projectName ||
+                    "-"}
+                </p>
+              )}
+
+            </div>
+
+            {/* Status */}
 
             <div>
 
@@ -988,7 +1159,6 @@ export default function InvoiceDetailPage() {
           </div>
 
         </section>
-
 
         {/* =================================================
             Invoice Information
@@ -1063,7 +1233,6 @@ export default function InvoiceDetailPage() {
           </div>
 
         </section>
-
 
         {/* =================================================
             Client
@@ -1186,7 +1355,6 @@ export default function InvoiceDetailPage() {
           </div>
 
         </section>
-
 
         {/* =================================================
             Invoice Items
@@ -1482,7 +1650,6 @@ export default function InvoiceDetailPage() {
 
         </section>
 
-
         {/* =================================================
             Notes
         ================================================= */}
@@ -1523,7 +1690,6 @@ export default function InvoiceDetailPage() {
           )}
 
         </section>
-
 
         {/* =================================================
             YJ Contact
@@ -1569,7 +1735,6 @@ export default function InvoiceDetailPage() {
           </div>
 
         </section>
-
 
         {/* =================================================
             PDF Preview
@@ -1671,3 +1836,4 @@ function Field({
     </div>
   );
 }
+
