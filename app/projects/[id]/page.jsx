@@ -22,10 +22,12 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState(null);
   const [clients, setClients] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [invoices, setInvoices] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [loadingProjects, setLoadingProjects] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [activeTab, setActiveTab] = useState("Overview");
@@ -45,7 +47,7 @@ export default function ProjectDetailPage() {
   });
 
   /* =====================================================
-     Load Project + Clients + PO + Invoices
+     Load Project + Clients + Projects + PO + Invoices
   ===================================================== */
 
   useEffect(() => {
@@ -83,6 +85,35 @@ export default function ProjectDetailPage() {
         setProject(projectData);
 
         /* =========================
+           Quote / Projects
+        ========================= */
+
+        try {
+          setLoadingProjects(true);
+
+          const projectsSnapshot = await getDocs(
+            collection(db, "quote")
+          );
+
+          const projectsData =
+            projectsSnapshot.docs.map((item) => ({
+              id: item.id,
+              ...item.data(),
+            }));
+
+          setProjects(projectsData);
+        } catch (error) {
+          console.error(
+            "Error loading projects:",
+            error
+          );
+
+          setProjects([]);
+        } finally {
+          setLoadingProjects(false);
+        }
+
+        /* =========================
            Clients
         ========================= */
 
@@ -109,24 +140,30 @@ export default function ProjectDetailPage() {
            Purchase Orders
         ========================= */
 
-try {
-  const poQuery = query(
-    collection(db, "purchaseOrders"),
-    where("projectId", "==", id)
-  );
+        try {
+          const poQuery = query(
+            collection(db, "purchaseOrders"),
+            where("projectId", "==", id)
+          );
 
-  const poSnapshot = await getDocs(poQuery);
+          const poSnapshot = await getDocs(
+            poQuery
+          );
 
-  setPurchaseOrders(
-    poSnapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    }))
-  );
-} catch (error) {
-  console.error("Error loading PO:", error);
-  setPurchaseOrders([]);
-}
+          setPurchaseOrders(
+            poSnapshot.docs.map((item) => ({
+              id: item.id,
+              ...item.data(),
+            }))
+          );
+        } catch (error) {
+          console.error(
+            "Error loading PO:",
+            error
+          );
+
+          setPurchaseOrders([]);
+        }
 
         /* =========================
            Invoices
@@ -172,27 +209,32 @@ try {
      Start Edit
   ===================================================== */
 
-    const handleEdit = () => {
-      setEditForm({
-        name: project.name || "",
-        clientId: project.clientId || "",
-        clientName: project.clientName || "",
-        projectType: project.projectType || "",
-        status: project.status || "Active",
-        contractValue: project.contractValue ?? "",
-        startDate: project.startDate || "",
-        expectedCompletion: project.expectedCompletion || "",
-        siteAddress: project.siteAddress || "",
-        description: project.description || "",
+  const handleEdit = () => {
+    setEditForm({
+      name: project.name || "",
+      clientId: project.clientId || "",
+      clientName: project.clientName || "",
+      projectType: project.projectType || "",
+      status: project.status || "Active",
+      contractValue: project.contractValue ?? "",
+      startDate: project.startDate || "",
+      expectedCompletion:
+        project.expectedCompletion || "",
+      siteAddress: project.siteAddress || "",
+      description: project.description || "",
 
-        projectManager: project.projectManager || "",
-        contact: project.contact || "",
-        architect: project.architect || "",
-        architectContact: project.architectContact || "",
-      });
+      projectManager:
+        project.projectManager || "",
+      contact:
+        project.contact || "",
+      architect:
+        project.architect || "",
+      architectContact:
+        project.architectContact || "",
+    });
 
-      setEditing(true);
-    };
+    setEditing(true);
+  };
 
   /* =====================================================
      Edit Change
@@ -253,8 +295,11 @@ try {
       const updatedData = {
         name: editForm.name.trim(),
 
-        clientId: editForm.clientId || "",
-        clientName: editForm.clientName || "",
+        clientId:
+          editForm.clientId || "",
+
+        clientName:
+          editForm.clientName || "",
 
         projectType:
           editForm.projectType || "",
@@ -278,10 +323,10 @@ try {
 
         projectManager:
           editForm.projectManager || "",
-        
+
         contact:
           editForm.contact || "",
-        
+
         architect:
           editForm.architect || "",
 
@@ -662,14 +707,40 @@ try {
                             Project Name *
                           </label>
 
-                          <input
+                          <select
                             name="name"
                             value={editForm.name}
                             onChange={
                               handleEditChange
                             }
-                            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
-                          />
+                            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
+                          >
+                            <option value="">
+                              {loadingProjects
+                                ? "Loading projects..."
+                                : "Select Project"}
+                            </option>
+
+                            {!loadingProjects &&
+                              projects.map(
+                                (projectItem) => (
+                                  <option
+                                    key={
+                                      projectItem.id
+                                    }
+                                    value={
+                                      projectItem.projectName ||
+                                      projectItem.name ||
+                                      projectItem.id
+                                    }
+                                  >
+                                    {projectItem.projectName ||
+                                      projectItem.name ||
+                                      projectItem.id}
+                                  </option>
+                                )
+                              )}
+                          </select>
 
                         </div>
 
@@ -682,26 +753,32 @@ try {
 
                           <select
                             name="clientId"
-                            value={editForm.clientId || ""}
-                            onChange={handleClientChange}
+                            value={
+                              editForm.clientId || ""
+                            }
+                            onChange={
+                              handleClientChange
+                            }
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                           >
                             <option value="">
                               Select Client
                             </option>
 
-                            {clients.map((client) => (
-                              <option
-                                key={client.id}
-                                value={client.id}
-                              >
-                                {client.name ||
-                                  client.companyName ||
-                                  client.clientName ||
-                                  client.clientId ||
-                                  client.id}
-                              </option>
-                            ))}
+                            {clients.map(
+                              (client) => (
+                                <option
+                                  key={client.id}
+                                  value={client.id}
+                                >
+                                  {client.name ||
+                                    client.companyName ||
+                                    client.clientName ||
+                                    client.clientId ||
+                                    client.id}
+                                </option>
+                              )
+                            )}
                           </select>
                         </div>
 
@@ -822,11 +899,10 @@ try {
                           </div>
 
                         </div>
-                           
-                           
-                           {/* Site */}     
 
-                          <div className="md:col-span-2">
+                        {/* Site */}
+
+                        <div className="md:col-span-2">
 
                           <label className="mb-2 block text-sm font-medium text-gray-700">
                             Site Address
@@ -890,77 +966,109 @@ try {
 
                         </div>
 
+                        {/* Project Manager */}
+
                         <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Project Manager / CA
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.projectManager}
-                          onChange={(e) =>
-                            setEditForm({
-                              ...editForm,
-                              projectManager: e.target.value,
-                            })
-                          }
-                          placeholder="Enter project manager / CA"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                        />
-                      </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          PM / CA Contact
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.contact}
-                          onChange={(e) =>
-                            setEditForm({
-                              ...editForm,
-                              contact: e.target.value,
-                            })
-                          }
-                          placeholder="Phone or email"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                        />
-                      </div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Project Manager / CA
+                          </label>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Architect
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.architect}
-                          onChange={(e) =>
-                            setEditForm({
-                              ...editForm,
-                              architect: e.target.value,
-                            })
-                          }
-                          placeholder="Enter architect"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                        />
-                      </div>
+                          <input
+                            type="text"
+                            value={
+                              editForm.projectManager
+                            }
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                projectManager:
+                                  e.target.value,
+                              })
+                            }
+                            placeholder="Enter project manager / CA"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                          />
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Architect Contact
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.architectContact}
-                          onChange={(e) =>
-                            setEditForm({
-                              ...editForm,
-                              architectContact: e.target.value,
-                            })
-                          }
-                          placeholder="Phone or email"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                        />
-                      </div>
+                        </div>
+
+                        {/* PM / CA Contact */}
+
+                        <div>
+
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            PM / CA Contact
+                          </label>
+
+                          <input
+                            type="text"
+                            value={
+                              editForm.contact
+                            }
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                contact:
+                                  e.target.value,
+                              })
+                            }
+                            placeholder="Phone or email"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                          />
+
+                        </div>
+
+                        {/* Architect */}
+
+                        <div>
+
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Architect
+                          </label>
+
+                          <input
+                            type="text"
+                            value={
+                              editForm.architect
+                            }
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                architect:
+                                  e.target.value,
+                              })
+                            }
+                            placeholder="Enter architect"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                          />
+
+                        </div>
+
+                        {/* Architect Contact */}
+
+                        <div>
+
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Architect Contact
+                          </label>
+
+                          <input
+                            type="text"
+                            value={
+                              editForm.architectContact
+                            }
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                architectContact:
+                                  e.target.value,
+                              })
+                            }
+                            placeholder="Phone or email"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                          />
+
+                        </div>
 
                         {/* Description */}
 
@@ -1039,7 +1147,7 @@ try {
                           project.projectType
                         }
                       />
-                      
+
                       <InfoRow
                         label="Site Address"
                         value={
@@ -1095,6 +1203,7 @@ try {
                           "-"
                         }
                       />
+
                       <InfoRow
                         label="PM/CA Contact"
                         value={
@@ -1102,14 +1211,16 @@ try {
                           "-"
                         }
                       />
-                        <InfoRow
+
+                      <InfoRow
                         label="Architect"
                         value={
                           project.architect ||
                           "-"
                         }
                       />
-                        <InfoRow
+
+                      <InfoRow
                         label="Architect Contact"
                         value={
                           project.architectContact ||
@@ -1215,7 +1326,7 @@ try {
                               <td className="py-4 pr-4 font-medium text-gray-900">
                                 {po.poNumber ||
                                   po.number ||
-                                  po.id||
+                                  po.id ||
                                   "-"}
                               </td>
 
@@ -1496,3 +1607,4 @@ function EmptyState({ text }) {
     </div>
   );
 }
+

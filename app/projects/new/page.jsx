@@ -15,8 +15,24 @@ import { db } from "@/lib/firebase";
 export default function NewProjectPage() {
   const router = useRouter();
 
+  /* =====================================================
+     Clients
+  ===================================================== */
+
   const [clients, setClients] = useState([]);
   const [loadingClients, setLoadingClients] = useState(true);
+
+  /* =====================================================
+     Quotes / Projects
+  ===================================================== */
+
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+
+  /* =====================================================
+     Form
+  ===================================================== */
 
   const [form, setForm] = useState({
     name: "",
@@ -28,15 +44,26 @@ export default function NewProjectPage() {
     startDate: "",
     expectedCompletion: "",
     siteAddress: "",
+
+    projectManager: "",
+    contact: "",
+    architect: "",
+    architectContact: "",
+
     description: "",
   });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  /* =====================================================
+     Load Clients
+  ===================================================== */
+
   useEffect(() => {
     const fetchClients = async () => {
       setLoadingClients(true);
+
       try {
         const snapshot = await getDocs(
           collection(db, "Clients")
@@ -58,6 +85,44 @@ export default function NewProjectPage() {
     fetchClients();
   }, []);
 
+  /* =====================================================
+     Load Quotes
+  ===================================================== */
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoadingProjects(true);
+        setError("");
+
+        const snapshot = await getDocs(
+          collection(db, "quote")
+        );
+
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setProjects(data);
+
+        // Do not automatically select the first quote
+        setSelectedProjectId("");
+      } catch (err) {
+        console.error("Error loading quotes:", err);
+        setError("Failed to load projects.");
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    loadProjects();
+  }, []);
+
+  /* =====================================================
+     Form Change
+  ===================================================== */
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -67,28 +132,71 @@ export default function NewProjectPage() {
     }));
   };
 
-const handleClientChange = (e) => {
-  const clientId = e.target.value;
+  /* =====================================================
+     Client Change
+  ===================================================== */
 
-  const client = clients.find(
-    (item) => item.id === clientId
-  );
+  const handleClientChange = (e) => {
+    const clientId = e.target.value;
 
-  setForm((prev) => ({
-    ...prev,
-    clientId,
-    clientName:
-      client?.name ||
-      client?.companyName ||
-      client?.clientName ||
-      "",
-  }));
-};
+    const client = clients.find(
+      (item) => item.id === clientId
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      clientId,
+      clientName:
+        client?.name ||
+        client?.companyName ||
+        client?.clientName ||
+        "",
+    }));
+  };
+
+  /* =====================================================
+     Quote / Project Change
+  ===================================================== */
+
+  const handleProjectChange = (e) => {
+    const projectId = e.target.value;
+
+    const project = projects.find(
+      (item) => item.id === projectId
+    );
+
+    setSelectedProjectId(projectId);
+
+    setForm((prev) => ({
+      ...prev,
+
+      // Project Name comes from quote
+      name:
+        project?.projectName ||
+        project?.name ||
+        "",
+
+      // Automatically fill Site Address
+      siteAddress:
+        project?.siteAddress ||
+        project?.address ||
+        "",
+    }));
+  };
+
+  /* =====================================================
+     Submit
+  ===================================================== */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setError("");
+
+    if (!selectedProjectId) {
+      setError("Please select a project.");
+      return;
+    }
 
     if (!form.name.trim()) {
       setError("Project name is required.");
@@ -100,6 +208,9 @@ const handleClientChange = (e) => {
     try {
       const projectData = {
         name: form.name.trim(),
+
+        // Keep relationship with quote
+        quoteId: selectedProjectId || "",
 
         clientId: form.clientId || "",
         clientName: form.clientName || "",
@@ -113,11 +224,28 @@ const handleClientChange = (e) => {
             : Number(form.contractValue),
 
         startDate: form.startDate || "",
+
         expectedCompletion:
           form.expectedCompletion || "",
 
         siteAddress:
           form.siteAddress.trim(),
+
+        /* =================================================
+           Project Contacts
+        ================================================= */
+
+        projectManager:
+          form.projectManager.trim(),
+
+        contact:
+          form.contact.trim(),
+
+        architect:
+          form.architect.trim(),
+
+        architectContact:
+          form.architectContact.trim(),
 
         description:
           form.description.trim(),
@@ -134,6 +262,7 @@ const handleClientChange = (e) => {
       router.push(`/projects/${docRef.id}`);
     } catch (error) {
       console.error("Error creating project:", error);
+
       setError("Failed to create project.");
       setSaving(false);
     }
@@ -165,7 +294,10 @@ const handleClientChange = (e) => {
 
           <div className="space-y-6">
 
-            {/* Project Information */}
+            {/* =================================================
+                Project Information
+            ================================================= */}
+
             <section className="rounded-xl border border-gray-200 bg-white p-6">
 
               <h2 className="text-base font-semibold text-gray-900">
@@ -174,20 +306,36 @@ const handleClientChange = (e) => {
 
               <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
 
-                {/* Name */}
+                {/* Project Name */}
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-sm font-medium text-gray-700">
                     Project Name *
                   </label>
 
-                  <input
-                    name="name"
-                    value={form.name}
-                    onChange={handleChange}
-                    placeholder="e.g. Hope Island"
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                  <select
+                    value={selectedProjectId}
+                    onChange={handleProjectChange}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                     required
-                  />
+                  >
+                    <option value="">
+                      {loadingProjects
+                        ? "Loading projects..."
+                        : "Select Project"}
+                    </option>
+
+                    {!loadingProjects &&
+                      projects.map((project) => (
+                        <option
+                          key={project.id}
+                          value={project.id}
+                        >
+                          {project.projectName ||
+                            project.name ||
+                            project.id}
+                        </option>
+                      ))}
+                  </select>
                 </div>
 
                 {/* Client */}
@@ -202,23 +350,23 @@ const handleClientChange = (e) => {
                     className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                   >
                     <option value="">
-                    {loadingClients
+                      {loadingClients
                         ? "Loading clients..."
                         : "Select Client"}
                     </option>
 
                     {!loadingClients &&
-                    clients.map((client) => (
+                      clients.map((client) => (
                         <option
-                        key={client.id}
-                        value={client.id}
+                          key={client.id}
+                          value={client.id}
                         >
-                        {client.name ||
+                          {client.name ||
                             client.companyName ||
                             client.clientName ||
                             client.id}
                         </option>
-                    ))}
+                      ))}
                   </select>
                 </div>
 
@@ -326,11 +474,11 @@ const handleClientChange = (e) => {
                     type="date"
                     value={form.expectedCompletion}
                     onChange={handleChange}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                   />
                 </div>
 
-                {/* Site */}
+                {/* Site Address */}
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-sm font-medium text-gray-700">
                     Site Address
@@ -346,21 +494,108 @@ const handleClientChange = (e) => {
                   />
                 </div>
 
-                {/* Description */}
-                <div className="md:col-span-2">
+              </div>
+            </section>
+
+            {/* =================================================
+                Project Contacts
+            ================================================= */}
+
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+
+              <h2 className="text-base font-semibold text-gray-900">
+                Project Contacts
+              </h2>
+
+              <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
+
+                {/* Project Manager / CA */}
+                <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Description
+                    Project Manager / CA
                   </label>
 
-                  <textarea
-                    name="description"
-                    value={form.description}
+                  <input
+                    name="projectManager"
+                    type="text"
+                    value={form.projectManager}
                     onChange={handleChange}
-                    rows={5}
-                    placeholder="Project description..."
-                    className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                    placeholder="Enter project manager / CA"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
                   />
                 </div>
+
+                {/* PM / CA Contact */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    PM / CA Contact
+                  </label>
+
+                  <input
+                    name="contact"
+                    type="text"
+                    value={form.contact}
+                    onChange={handleChange}
+                    placeholder="Phone or email"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                  />
+                </div>
+
+                {/* Architect */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Architect
+                  </label>
+
+                  <input
+                    name="architect"
+                    type="text"
+                    value={form.architect}
+                    onChange={handleChange}
+                    placeholder="Enter architect"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                  />
+                </div>
+
+                {/* Architect Contact */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Architect Contact
+                  </label>
+
+                  <input
+                    name="architectContact"
+                    type="text"
+                    value={form.architectContact}
+                    onChange={handleChange}
+                    placeholder="Phone or email"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                  />
+                </div>
+
+              </div>
+            </section>
+
+            {/* =================================================
+                Description
+            ================================================= */}
+
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+
+              <h2 className="text-base font-semibold text-gray-900">
+                Description / Notes
+              </h2>
+
+              <div className="mt-6">
+
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleChange}
+                  rows={5}
+                  placeholder="Project description..."
+                  className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
+                />
 
               </div>
             </section>
@@ -387,7 +622,9 @@ const handleClientChange = (e) => {
                 disabled={saving}
                 className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-amber-400 hover:text-black cursor-pointer"
               >
-                {saving ? "Creating..." : "Create Project"}
+                {saving
+                  ? "Creating..."
+                  : "Create Project"}
               </button>
 
             </div>
@@ -398,3 +635,4 @@ const handleClientChange = (e) => {
     </div>
   );
 }
+

@@ -9,6 +9,11 @@ const menuItems = [
     href: "/",
     icon: "▦",
   },
+    {
+    name: "Quote",
+    href: "/quote",
+    icon: "▣",
+  },
   {
     name: "Projects",
     href: "/projects",
