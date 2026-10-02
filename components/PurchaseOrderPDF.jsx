@@ -268,11 +268,11 @@ export default function PurchaseOrderPDF({ data }) {
         <View style={styles.topInfo}>
           <View style={styles.supplierSection}>
             <Text style={styles.sectionTitle}>
-              SUBCONTRACTOR / SUPPLIER
+              SUBCONTRACTOR
             </Text>
 
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Subcontractor / Supplier:</Text>
+              <Text style={styles.label}>Subcontractor:</Text>
               <Text style={styles.value}>
                 {data.supplier?.name || ""}
               </Text>
