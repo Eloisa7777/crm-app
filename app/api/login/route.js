@@ -10,6 +10,11 @@ const USERS = {
     password: "8888000",
     role: "yjpo",
   },
+
+  yjest: {
+    password: "1121",
+    role: "yjest",
+  },
 };
 
 export async function POST(request) {

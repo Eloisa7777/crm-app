@@ -1,9 +1,9 @@
+
 "use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-
+import { useParams, useRouter } from "next/navigation";
 import {
   collection,
   doc,
@@ -15,428 +15,367 @@ import {
 
 import { db } from "@/lib/firebase";
 
-/* =========================================================
+/* =====================================================
    Status Options
-   ========================================================= */
+===================================================== */
 
 const STATUS_OPTIONS = [
-  {
-    value: "Pending",
-    label: "Pending Tender",
-  },
-  {
-    value: "Tendering",
-    label: "Tendering",
-  },
-  {
-    value: "Submitted",
-    label: "Submitted",
-  },
-  {
-    value: "onHold",
-    label: "On Hold",
-  },
-  {
-    value: "awarded",
-    label: "Awarded",
-  },
-  {
-    value: "unsuccessful",
-    label: "Unsuccessful",
-  },
+  { value: "Pending", label: "Pending Tender" },
+  { value: "Tendering", label: "Tendering" },
+  { value: "Submitted", label: "Submitted" },
+  { value: "onHold", label: "On Hold" },
+  { value: "awarded", label: "Awarded" },
+  { value: "unsuccessful", label: "Unsuccessful" },
 ];
 
-/* =========================================================
-   Helper - Format Firestore Date
-   ========================================================= */
+/* =====================================================
+   Format Date
+===================================================== */
 
 function formatDate(value) {
-  if (!value) return "";
+  if (!value) return "-";
 
-  if (typeof value?.toDate === "function") {
-    return value.toDate().toISOString().split("T")[0];
+  if (typeof value === "string") {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleDateString("en-AU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   }
 
-  if (value instanceof Date) {
-    return value.toISOString().split("T")[0];
+  if (value?.toDate) {
+    return value.toDate().toLocaleDateString("en-AU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   }
 
-  return String(value).split("T")[0];
+  return "-";
 }
 
-/* =========================================================
-   Reusable Field Component
-   IMPORTANT:
-   Keep this OUTSIDE QuoteDetailPage.
-   Otherwise input loses focus on every render.
-   ========================================================= */
+/* =====================================================
+   Convert Date Value For Input
+===================================================== */
+
+function normalizeDateInput(value) {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    return value.includes("T") ? value.split("T")[0] : value;
+  }
+
+  if (value?.toDate) {
+    const date = value.toDate();
+
+    return date.toISOString().split("T")[0];
+  }
+
+  return "";
+}
+
+/* =====================================================
+   Create Form From Quote
+===================================================== */
+
+function createFormFromQuote(data) {
+  return {
+    projectName: data.projectName || "",
+    status: data.status || "Pending",
+
+    dueDate: normalizeDateInput(data.dueDate),
+
+    siteAddress: data.siteAddress || "",
+
+    note: data.note || "",
+
+    estimator: data.estimator || "",
+
+    cpOnlyRate: data.cpOnlyRate || "",
+    cpCarpentryRate: data.cpCarpentryRate || "",
+    cpCarpentryExternalRate: data.cpCarpentryExternalRate || "",
+    cpCarpentryPrelimsRate: data.cpCarpentryPrelimsRate || "",
+    cpCarpentryExternalPrelimsRate:
+      data.cpCarpentryExternalPrelimsRate || "",
+
+    totalSqmInternal: data.totalSqmInternal || "",
+    totalSqmExternal: data.totalSqmExternal || "",
+    esttotalvalue: data.esttotalvalue || "",
+    margin: data.margin || "",
+
+    clientId: data.clientId || "",
+    client: data.client || null,
+
+    items: Array.isArray(data.items)
+      ? data.items.map((item) => ({
+          date: normalizeDateInput(item?.date),
+          action: item?.action || "",
+        }))
+      : [],
+  };
+}
+
+/* =====================================================
+   Reusable Field
+===================================================== */
 
 function Field({
   label,
   value,
   onChange,
-  editing,
   type = "text",
-  prefix = "",
-  suffix = "",
-  min,
-  max,
-  step,
-  placeholder = "",
+  prefix,
+  suffix,
+  placeholder,
+  disabled = false,
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-gray-700">
+      <label className="mb-1.5 block text-sm font-medium text-gray-700">
         {label}
       </label>
 
-      {editing ? (
-        <div className="relative">
-          {prefix && (
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-              {prefix}
-            </span>
-          )}
+      <div className="relative">
+        {prefix && (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+            {prefix}
+          </span>
+        )}
 
-          <input
-            type={type}
-            value={value ?? ""}
-            onChange={(e) => onChange(e.target.value)}
-            min={min}
-            max={max}
-            step={step}
-            placeholder={placeholder}
-            className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-1 focus:ring-gray-500 ${
-              prefix ? "pl-7" : ""
-            } ${suffix ? "pr-8" : ""}`}
-          />
-
-          {suffix && (
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-              {suffix}
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className="min-h-[42px] rounded-lg bg-gray-50 px-3 py-2.5 text-sm text-gray-900">
-          {value !== undefined &&
-          value !== null &&
-          value !== ""
-            ? `${prefix}${value}${suffix}`
-            : "-"}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* =========================================================
-   Client Field Component
-   IMPORTANT:
-   Keep this OUTSIDE QuoteDetailPage.
-   ========================================================= */
-
-function ClientField({
-  label,
-  field,
-  value,
-  editing,
-  onChange,
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-medium text-gray-700">
-        {label}
-      </label>
-
-      {editing ? (
         <input
-          type="text"
-          value={value || ""}
-          onChange={(e) =>
-            onChange(field, e.target.value)
-          }
-          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
+          type={type}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black disabled:bg-gray-100 disabled:text-gray-500 ${
+            prefix ? "pl-7" : ""
+          } ${suffix ? "pr-8" : ""}`}
         />
-      ) : (
-        <div className="min-h-[42px] rounded-lg bg-gray-50 px-3 py-2.5 text-sm text-gray-900">
-          {value || "-"}
-        </div>
-      )}
+
+        {suffix && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+            {suffix}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
-/* =========================================================
+/* =====================================================
+   Textarea Field
+===================================================== */
+
+function TextAreaField({
+  label,
+  value,
+  onChange,
+  rows = 3,
+  placeholder,
+  disabled = false,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+
+      <textarea
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black disabled:bg-gray-100 disabled:text-gray-500"
+      />
+    </div>
+  );
+}
+
+/* =====================================================
+   Display Field
+===================================================== */
+
+function DisplayField({ label, value, prefix, suffix }) {
+  return (
+    <div>
+      <div className="mb-1.5 text-sm font-medium text-gray-500">
+        {label}
+      </div>
+
+      <div className="min-h-[42px] rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900">
+        {value !== "" && value !== null && value !== undefined
+          ? `${prefix || ""}${value}${suffix || ""}`
+          : "-"}
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================
+   Client Snapshot
+===================================================== */
+
+function ClientSnapshot({ client }) {
+  if (!client) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
+        No client selected.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+      <div className="mb-4">
+        <div className="text-base font-semibold text-gray-900">
+          {client.name || "-"}
+        </div>
+
+        {client.abn && (
+          <div className="mt-1 text-sm text-gray-500">
+            ABN: {client.abn}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+            Contact
+          </div>
+          <div className="mt-1 text-sm text-gray-800">
+            {client.contact || "-"}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+            Email
+          </div>
+          <div className="mt-1 text-sm text-gray-800">
+            {client.email || "-"}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+            Phone
+          </div>
+          <div className="mt-1 text-sm text-gray-800">
+            {client.phone || "-"}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+            Address
+          </div>
+          <div className="mt-1 whitespace-pre-line text-sm text-gray-800">
+            {client.address || "-"}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================
    Quote Detail Page
-   ========================================================= */
+===================================================== */
 
 export default function QuoteDetailPage() {
   const params = useParams();
+  const router = useRouter();
 
   const id = params?.id;
 
-  /* =========================================================
-     State
-     ========================================================= */
-
   const [quote, setQuote] = useState(null);
-
   const [clients, setClients] = useState([]);
 
-  const [loading, setLoading] = useState(true);
-  const [loadingClients, setLoadingClients] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(null);
 
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const [form, setForm] = useState({
-    quoteNumber: "",
-
-    projectName: "",
-
-    clientId: "",
-
-    client: {
-      name: "",
-      abn: "",
-      contact: "",
-      email: "",
-      phone: "",
-      address: "",
-    },
-
-    estimator: "",
-
-    status: "Pending",
-
-    dueDate: "",
-    chasingDate: "",
-
-    siteAddress: "",
-
-    esttotalvalue: "",
-    estcpvalue: "",
-    margin: "",
-    pricem2: "",
-    priceunit: "",
-
-    note: "",
-
-    items: [],
-  });
-
-  /* =========================================================
-     Load Quote
-     ========================================================= */
+  /* =====================================================
+     Load Quote + Clients
+  ===================================================== */
 
   useEffect(() => {
     if (!id) return;
 
-    const loadQuote = async () => {
+    async function loadData() {
       try {
         setLoading(true);
 
         const quoteRef = doc(db, "quote", id);
-
         const quoteSnap = await getDoc(quoteRef);
 
         if (!quoteSnap.exists()) {
-          setQuote(null);
+          alert("Quote not found.");
+          router.push("/quote");
           return;
         }
 
-        const data = quoteSnap.data();
-
-        setQuote({
+        const quoteData = {
           id: quoteSnap.id,
-          ...data,
-        });
+          ...quoteSnap.data(),
+        };
 
-        /* -----------------------------------------------------
-           Client Snapshot
-           ----------------------------------------------------- */
+        setQuote(quoteData);
+        setForm(createFormFromQuote(quoteData));
 
-        const clientData =
-          data.client &&
-          typeof data.client === "object"
-            ? data.client
-            : {};
-
-        /* -----------------------------------------------------
-           Items
-           ----------------------------------------------------- */
-
-        const items = Array.isArray(data.items)
-          ? data.items.map((item) => ({
-              date: item?.date || "",
-              action: item?.action || "",
-            }))
-          : [];
-
-        /* -----------------------------------------------------
-           Set Form
-           ----------------------------------------------------- */
-
-        setForm({
-          quoteNumber: data.quoteNumber || "",
-
-          /*
-            Project Name is plain text.
-            No projectId.
-            No projects collection.
-          */
-          projectName: data.projectName || "",
-
-          clientId: data.clientId || "",
-
-          client: {
-            name: clientData.name || "",
-            abn: clientData.abn || "",
-            contact: clientData.contact || "",
-            email: clientData.email || "",
-            phone: clientData.phone || "",
-            address: clientData.address || "",
-          },
-
-          estimator: data.estimator || "",
-
-          status: data.status || "Pending",
-
-          dueDate: formatDate(data.dueDate),
-          chasingDate: formatDate(data.chasingDate),
-
-          /*
-            Site Address is stored directly on Quote.
-          */
-          siteAddress: data.siteAddress || "",
-
-          esttotalvalue:
-            data.esttotalvalue !== undefined &&
-            data.esttotalvalue !== null
-              ? String(data.esttotalvalue)
-              : "",
-
-          estcpvalue:
-            data.estcpvalue !== undefined &&
-            data.estcpvalue !== null
-              ? String(data.estcpvalue)
-              : "",
-
-          margin:
-            data.margin !== undefined &&
-            data.margin !== null
-              ? String(data.margin)
-              : "",
-
-          pricem2:
-            data.pricem2 !== undefined &&
-            data.pricem2 !== null
-              ? String(data.pricem2)
-              : "",
-
-          priceunit:
-            data.priceunit !== undefined &&
-            data.priceunit !== null
-              ? String(data.priceunit)
-              : "",
-
-          note: data.note || "",
-
-          items,
-        });
-      } catch (error) {
-        console.error(
-          "Failed to load quote:",
-          error
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadQuote();
-  }, [id]);
-
-  /* =========================================================
-     Load Clients
-     ========================================================= */
-
-  useEffect(() => {
-    const loadClients = async () => {
-      try {
-        setLoadingClients(true);
-
-        const snapshot = await getDocs(
+        const clientsSnap = await getDocs(
           collection(db, "Clients")
         );
 
-        const clientList = snapshot.docs.map(
-          (docSnap) => ({
-            id: docSnap.id,
-            ...docSnap.data(),
-          })
-        );
+        const clientList = clientsSnap.docs.map((clientDoc) => ({
+          id: clientDoc.id,
+          ...clientDoc.data(),
+        }));
 
         setClients(clientList);
       } catch (error) {
-        console.error(
-          "Failed to load clients:",
-          error
-        );
+        console.error("Failed to load quote:", error);
+        alert("Failed to load quote.");
       } finally {
-        setLoadingClients(false);
+        setLoading(false);
       }
-    };
+    }
 
-    loadClients();
-  }, []);
+    loadData();
+  }, [id, router]);
 
-  /* =========================================================
+  /* =====================================================
      Update Form
-     ========================================================= */
+  ===================================================== */
 
-  const updateForm = (field, value) => {
+  function updateField(field, value) {
     setForm((prev) => ({
       ...prev,
       [field]: value,
     }));
-  };
+  }
 
-  /* =========================================================
-     Update Client
-     ========================================================= */
-
-  const updateClient = (field, value) => {
-    setForm((prev) => ({
-      ...prev,
-
-      client: {
-        ...prev.client,
-        [field]: value,
-      },
-    }));
-  };
-
-  /* =========================================================
+  /* =====================================================
      Client Change
-     ========================================================= */
+  ===================================================== */
 
-  const handleClientChange = (clientId) => {
+  function handleClientChange(clientId) {
     if (!clientId) {
       setForm((prev) => ({
         ...prev,
-
         clientId: "",
-
-        client: {
-          name: "",
-          abn: "",
-          contact: "",
-          email: "",
-          phone: "",
-          address: "",
-        },
+        client: null,
       }));
 
       return;
@@ -446,14 +385,15 @@ export default function QuoteDetailPage() {
       (client) => client.id === clientId
     );
 
-    if (!selectedClient) return;
+    if (!selectedClient) {
+      return;
+    }
 
     setForm((prev) => ({
       ...prev,
-
       clientId: selectedClient.id,
-
       client: {
+        id: selectedClient.id,
         name: selectedClient.name || "",
         abn: selectedClient.abn || "",
         contact: selectedClient.contact || "",
@@ -462,1023 +402,759 @@ export default function QuoteDetailPage() {
         address: selectedClient.address || "",
       },
     }));
-  };
+  }
 
-  /* =========================================================
-     Add feedback
-     ========================================================= */
+  /* =====================================================
+     Note Line Count
+  ===================================================== */
 
-  const addItem = () => {
+  const noteLineCount = form?.note
+    ? form.note.split("\n").length
+    : 0;
+
+  /* =====================================================
+     Add Action
+  ===================================================== */
+
+  function addItem() {
     setForm((prev) => ({
       ...prev,
-
       items: [
-        ...prev.items,
+        ...(prev.items || []),
         {
           date: "",
           action: "",
         },
       ],
     }));
-  };
+  }
 
-  /* =========================================================
-     Remove feedback
-     ========================================================= */
+  /* =====================================================
+     Update Action
+  ===================================================== */
 
-  const removeItem = (index) => {
+  function updateItem(index, field, value) {
     setForm((prev) => ({
       ...prev,
-
-      items: prev.items.filter(
-        (_, itemIndex) =>
-          itemIndex !== index
+      items: prev.items.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
       ),
     }));
-  };
+  }
 
-  /* =========================================================
-     Update Quote Item
-     ========================================================= */
+  /* =====================================================
+     Remove Action
+  ===================================================== */
 
-  const updateItem = (
-    index,
-    field,
-    value
-  ) => {
+  function removeItem(index) {
+    setForm((prev) => {
+      if (prev.items.length <= 1) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        items: prev.items.filter(
+          (_, itemIndex) => itemIndex !== index
+        ),
+      };
+    });
+  }
+
+  /* =====================================================
+     Start Editing
+  ===================================================== */
+
+  function startEditing() {
     setForm((prev) => ({
       ...prev,
-
-      items: prev.items.map(
-        (item, itemIndex) =>
-          itemIndex === index
-            ? {
-                ...item,
-                [field]: value,
-              }
-            : item
-      ),
+      items:
+        prev.items && prev.items.length > 0
+          ? prev.items
+          : [
+              {
+                date: "",
+                action: "",
+              },
+            ],
     }));
-  };
 
-  /* =========================================================
-     Save Quote
-     ========================================================= */
+    setEditing(true);
+  }
 
-  const handleSave = async () => {
-    if (!id) return;
+  /* =====================================================
+     Cancel Editing
+  ===================================================== */
 
-    if (!form.clientId) {
-      alert("Please select a client.");
+  function cancelEditing() {
+    if (!quote) return;
+
+    setForm(createFormFromQuote(quote));
+    setEditing(false);
+  }
+
+  /* =====================================================
+     Save
+  ===================================================== */
+
+  async function handleSave() {
+    if (!id || !form) return;
+
+    if (!form.projectName.trim()) {
+      alert("Please enter Project Name.");
       return;
+    }
+
+    if (noteLineCount > 20) {
+      alert("Note cannot exceed 20 lines.");
+      return;
+    }
+
+    if (form.clientId) {
+      const selectedClient = clients.find(
+        (client) => client.id === form.clientId
+      );
+
+      if (!selectedClient) {
+        alert("Selected client could not be found.");
+        return;
+      }
     }
 
     try {
       setSaving(true);
 
-      const selectedClient = clients.find(
-        (client) =>
-          client.id === form.clientId
-      );
+      const selectedClient = form.clientId
+        ? clients.find((client) => client.id === form.clientId)
+        : null;
 
-      if (!selectedClient) {
-        alert(
-          "Selected client could not be found."
-        );
-        return;
-      }
+      const clientSnapshot = selectedClient
+        ? {
+            id: selectedClient.id,
+            name: selectedClient.name || "",
+            abn: selectedClient.abn || "",
+            contact: selectedClient.contact || "",
+            email: selectedClient.email || "",
+            phone: selectedClient.phone || "",
+            address: selectedClient.address || "",
+          }
+        : null;
 
-      /* -----------------------------------------------------
-         Client Snapshot
-         ----------------------------------------------------- */
-
-      const cleanClient = {
-        id: selectedClient.id,
-
-        name:
-          form.client.name ||
-          selectedClient.name ||
-          "",
-
-        abn:
-          form.client.abn ||
-          selectedClient.abn ||
-          "",
-
-        contact:
-          form.client.contact ||
-          selectedClient.contact ||
-          "",
-
-        email:
-          form.client.email ||
-          selectedClient.email ||
-          "",
-
-        phone:
-          form.client.phone ||
-          selectedClient.phone ||
-          "",
-
-        address:
-          form.client.address ||
-          selectedClient.address ||
-          "",
-      };
-
-      /* -----------------------------------------------------
-         Updated Quote Data
-         ----------------------------------------------------- */
+      const cleanedItems = (form.items || [])
+        .filter((item) => item.date || item.action)
+        .map((item) => ({
+          date: item.date || "",
+          action: item.action || "",
+        }));
 
       const updatedData = {
-        quoteNumber:
-          form.quoteNumber.trim(),
-
-        /*
-          Project Name is manually entered.
-          It is NOT linked to projects.
-        */
-        projectName:
-          form.projectName.trim(),
-
-        /*
-          Client relationship
-        */
-        clientId: selectedClient.id,
-
-        /*
-          Client snapshot
-        */
-        client: cleanClient,
-
-        estimator:
-          form.estimator.trim(),
-
+        projectName: form.projectName,
         status: form.status,
 
-        dueDate:
-          form.dueDate || "",
+        dueDate: form.dueDate || "",
 
-        chasingDate:
-          form.chasingDate || "",
-
-        /*
-          Site Address is stored directly
-          on the Quote.
-        */
-        siteAddress:
-          form.siteAddress.trim(),
-
-        esttotalvalue:
-          form.esttotalvalue,
-
-        estcpvalue:
-          form.estcpvalue,
-
-        margin:
-          form.margin,
-
-        pricem2:
-          form.pricem2,
-
-        priceunit:
-          form.priceunit,
+        siteAddress: form.siteAddress,
 
         note: form.note,
 
-        items: form.items.map(
-          (item) => ({
-            date: item.date || "",
-            action: item.action || "",
-          })
-        ),
+        estimator: form.estimator,
 
-        updatedAt:
-          serverTimestamp(),
+        cpOnlyRate: form.cpOnlyRate,
+        cpCarpentryRate: form.cpCarpentryRate,
+        cpCarpentryExternalRate:
+          form.cpCarpentryExternalRate,
+        cpCarpentryPrelimsRate:
+          form.cpCarpentryPrelimsRate,
+        cpCarpentryExternalPrelimsRate:
+          form.cpCarpentryExternalPrelimsRate,
+
+        totalSqmInternal: form.totalSqmInternal,
+        totalSqmExternal: form.totalSqmExternal,
+        esttotalvalue: form.esttotalvalue,
+        margin: form.margin,
+
+        clientId: selectedClient ? selectedClient.id : "",
+        client: clientSnapshot,
+
+        items: cleanedItems,
       };
 
-      /* -----------------------------------------------------
-         Update Firestore
-         ----------------------------------------------------- */
-
-      await updateDoc(
-        doc(db, "quote", id),
-        updatedData
-      );
-
-      /* -----------------------------------------------------
-         Update Local Quote
-         ----------------------------------------------------- */
-
-      setQuote((prev) => ({
-        ...prev,
+      await updateDoc(doc(db, "quote", id), {
         ...updatedData,
-      }));
+        updatedAt: serverTimestamp(),
+      });
 
-      setForm((prev) => ({
-        ...prev,
+      const updatedQuote = {
+        ...quote,
+        ...updatedData,
+      };
 
-        quoteNumber:
-          form.quoteNumber.trim(),
-
-        projectName:
-          form.projectName.trim(),
-
-        clientId:
-          selectedClient.id,
-
-        client: cleanClient,
-
-        estimator:
-          form.estimator.trim(),
-
-        status:
-          form.status,
-
-        dueDate:
-          form.dueDate || "",
-
-        chasingDate:
-          form.chasingDate || "",
-
-        siteAddress:
-          form.siteAddress.trim(),
-
-        esttotalvalue:
-          form.esttotalvalue,
-
-        estcpvalue:
-          form.estcpvalue,
-
-        margin:
-          form.margin,
-
-        pricem2:
-          form.pricem2,
-
-        priceunit:
-          form.priceunit,
-
-        note:
-          form.note,
-
-        items:
-          form.items,
-      }));
-
+      setQuote(updatedQuote);
+      setForm(createFormFromQuote(updatedQuote));
       setEditing(false);
     } catch (error) {
-      console.error(
-        "Failed to save quote:",
-        error
-      );
-
+      console.error("Failed to save quote:", error);
       alert("Failed to save quote.");
     } finally {
       setSaving(false);
     }
-  };
-
-  /* =========================================================
-     Cancel Editing
-     ========================================================= */
-
-  const handleCancel = () => {
-    if (!quote) return;
-
-    const clientData =
-      quote.client &&
-      typeof quote.client === "object"
-        ? quote.client
-        : {};
-
-    setForm({
-      quoteNumber:
-        quote.quoteNumber || "",
-
-      projectName:
-        quote.projectName || "",
-
-      clientId:
-        quote.clientId || "",
-
-      client: {
-        name:
-          clientData.name || "",
-
-        abn:
-          clientData.abn || "",
-
-        contact:
-          clientData.contact || "",
-
-        email:
-          clientData.email || "",
-
-        phone:
-          clientData.phone || "",
-
-        address:
-          clientData.address || "",
-      },
-
-      estimator:
-        quote.estimator || "",
-
-      status:
-        quote.status || "Pending",
-
-      dueDate:
-        formatDate(quote.dueDate),
-
-      chasingDate:
-        formatDate(
-          quote.chasingDate
-        ),
-
-      siteAddress:
-        quote.siteAddress || "",
-
-      esttotalvalue:
-        quote.esttotalvalue !==
-          undefined &&
-        quote.esttotalvalue !== null
-          ? String(
-              quote.esttotalvalue
-            )
-          : "",
-
-      estcpvalue:
-        quote.estcpvalue !==
-          undefined &&
-        quote.estcpvalue !== null
-          ? String(
-              quote.estcpvalue
-            )
-          : "",
-
-      margin:
-        quote.margin !==
-          undefined &&
-        quote.margin !== null
-          ? String(quote.margin)
-          : "",
-
-      pricem2:
-        quote.pricem2 !==
-          undefined &&
-        quote.pricem2 !== null
-          ? String(quote.pricem2)
-          : "",
-
-      priceunit:
-        quote.priceunit !==
-          undefined &&
-        quote.priceunit !== null
-          ? String(
-              quote.priceunit
-            )
-          : "",
-
-      note:
-        quote.note || "",
-
-      items: Array.isArray(
-        quote.items
-      )
-        ? quote.items.map(
-            (item) => ({
-              date:
-                item?.date || "",
-              action:
-                item?.action || "",
-            })
-          )
-        : [],
-    });
-
-    setEditing(false);
-  };
-
-  /* =========================================================
-     Loading
-     ========================================================= */
-
-  if (loading) {
-    return (
-      <div className="p-8 text-gray-500">
-        Loading quote...
-      </div>
-    );
   }
 
-  /* =========================================================
-     Quote Not Found
-     ========================================================= */
+  /* =====================================================
+     Loading
+  ===================================================== */
 
-  if (!quote) {
+  if (loading || !form) {
     return (
-      <div className="p-8">
-        <div className="rounded-xl border border-gray-200 bg-white p-8">
-          <h1 className="text-xl font-semibold text-gray-900">
-            Quote not found
-          </h1>
-
-          <p className="mt-2 text-sm text-gray-500">
-            The quote you are looking for
-            does not exist.
-          </p>
-
-          <Link
-            href="/quote"
-            className="mt-6 inline-block text-sm font-medium text-gray-900 underline"
-          >
-            Back to Quotes
-          </Link>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="text-sm text-gray-500">
+          Loading quote...
         </div>
       </div>
     );
   }
 
-  /* =========================================================
+  /* =====================================================
+     Status Label
+  ===================================================== */
+
+  const statusLabel =
+    STATUS_OPTIONS.find(
+      (option) => option.value === form.status
+    )?.label || form.status;
+
+  /* =====================================================
      Page
-     ========================================================= */
+  ===================================================== */
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="min-h-screen bg-gray-50">
+      {/* =================================================
+          Header
+      ================================================= */}
 
-        {/* ===================================================
-            Header
-            =================================================== */}
+      <div className="border-b border-gray-200 bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="mb-1 text-sm text-gray-500">
+                <Link
+                  href="/quote"
+                  className="hover:text-black"
+                >
+                  Quote Management
+                </Link>
 
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
-              <Link
-                href="/quote"
-                className="hover:text-gray-900"
-              >
-                Quotes
-              </Link>
+                <span className="mx-2">/</span>
 
-              <span>/</span>
+                <span>Quote Detail</span>
+              </div>
 
-              <span>
-                {form.quoteNumber ||
-                  "Quote"}
-              </span>
+              <h1 className="text-2xl font-semibold text-gray-900">
+                {form.projectName || "Quote"}
+              </h1>
             </div>
 
-            <h1 className="text-2xl font-semibold text-gray-900">
-              {form.quoteNumber ||
-                "Quote"}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/quote"
-              className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Back
-            </Link>
-
-            {!editing ? (
-              <button
-                type="button"
-                onClick={() =>
-                  setEditing(true)
-                }
-                className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+            <div className="flex items-center gap-3">
+              <Link
+                href="/quote"
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
               >
-                Edit Quote
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={
-                    handleCancel
-                  }
-                  disabled={saving}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
+                Back
+              </Link>
 
+              {!editing ? (
                 <button
                   type="button"
-                  onClick={handleSave}
-                  disabled={
-                    saving ||
-                    loadingClients
-                  }
-                  className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={startEditing}
+                  className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
                 >
-                  {saving
-                    ? "Saving..."
-                    : "Save Changes"}
+                  Edit
                 </button>
-              </>
-            )}
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={cancelEditing}
+                    disabled={saving}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* ===================================================
-            Main Content
-            =================================================== */}
+      {/* =================================================
+          Main
+      ================================================= */}
 
+      <main className="mx-auto max-w-7xl px-6 py-8">
         <div className="space-y-6">
-
           {/* =================================================
               Quote Management
-              ================================================= */}
+          ================================================= */}
 
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-6">
+          <section className="rounded-xl border border-gray-200 bg-white">
+            <div className="border-b border-gray-200 px-6 py-4">
               <h2 className="text-lg font-semibold text-gray-900">
                 Quote Management
               </h2>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Project name, status and
-                site address
-              </p>
             </div>
 
-            {/* -----------------------------------------------
-                Project Name + Status
-                ----------------------------------------------- */}
-
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-
-              {/* Project Name */}
-
-              <Field
-                label="Project Name"
-                value={
-                  form.projectName
-                }
-                editing={editing}
-                onChange={(value) =>
-                  updateForm(
-                    "projectName",
-                    value
-                  )
-                }
-              />
-
-              {/* Status */}
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-
+            <div className="p-6">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 {editing ? (
-                  <select
-                    value={
-                      form.status
-                    }
-                    onChange={(e) =>
-                      updateForm(
-                        "status",
-                        e.target.value
-                      )
-                    }
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                  >
-                    {STATUS_OPTIONS.map(
-                      (option) => (
-                        <option
-                          key={
-                            option.value
-                          }
-                          value={
-                            option.value
-                          }
-                        >
-                          {
-                            option.label
-                          }
-                        </option>
-                      )
-                    )}
-                  </select>
+                  <>
+                    <Field
+                      label="Project Name"
+                      value={form.projectName}
+                      onChange={(value) =>
+                        updateField("projectName", value)
+                      }
+                    />
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                        Status
+                      </label>
+
+                      <select
+                        value={form.status}
+                        onChange={(e) =>
+                          updateField("status", e.target.value)
+                        }
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                      >
+                        {STATUS_OPTIONS.map((option) => (
+                          <option
+                            key={option.value}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
                 ) : (
-                  <div className="min-h-[42px] rounded-lg bg-gray-50 px-3 py-2.5 text-sm text-gray-900">
-                    {STATUS_OPTIONS.find(
-                      (option) =>
-                        option.value ===
-                        form.status
-                    )?.label ||
-                      form.status ||
-                      "-"}
+                  <>
+                    <DisplayField
+                      label="Project Name"
+                      value={form.projectName}
+                    />
+
+                    <DisplayField
+                      label="Status"
+                      value={statusLabel}
+                    />
+                  </>
+                )}
+              </div>
+
+              <div className="mt-5">
+                {editing ? (
+                  <TextAreaField
+                    label="Site Address"
+                    value={form.siteAddress}
+                    onChange={(value) =>
+                      updateField("siteAddress", value)
+                    }
+                    rows={3}
+                  />
+                ) : (
+                  <div>
+                    <div className="mb-1.5 text-sm font-medium text-gray-500">
+                      Site Address
+                    </div>
+
+                    <div className="min-h-[72px] whitespace-pre-line rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900">
+                      {form.siteAddress || "-"}
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* -----------------------------------------------
-                Site Address
-                ----------------------------------------------- */}
-
-            <div className="mt-5">
-              <Field
-                label="Site Address"
-                value={
-                  form.siteAddress
-                }
-                editing={editing}
-                onChange={(value) =>
-                  updateForm(
-                    "siteAddress",
-                    value
-                  )
-                }
-              />
-            </div>
-          </section>
-
-          {/* =================================================
-              Quote Information
-              ================================================= */}
-
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Quote Information
-              </h2>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Quote dates, estimator
-                and pricing
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-
-              {/* Quote Number */}
-
-              <Field
-                label="Quote Number"
-                value={
-                  form.quoteNumber
-                }
-                editing={editing}
-                onChange={(value) =>
-                  updateForm(
-                    "quoteNumber",
-                    value
-                  )
-                }
-              />
-
-              {/* Due Date */}
-
-              <Field
-                label="Due Date"
-                value={
-                  form.dueDate
-                }
-                editing={editing}
-                type="date"
-                onChange={(value) =>
-                  updateForm(
-                    "dueDate",
-                    value
-                  )
-                }
-              />
-
-              {/* Chasing Date */}
-
-              <Field
-                label="Chasing Date"
-                value={
-                  form.chasingDate
-                }
-                editing={editing}
-                type="date"
-                onChange={(value) =>
-                  updateForm(
-                    "chasingDate",
-                    value
-                  )
-                }
-              />
-
-              {/* Estimator */}
-
-              <Field
-                label="Estimator"
-                value={
-                  form.estimator
-                }
-                editing={editing}
-                onChange={(value) =>
-                  updateForm(
-                    "estimator",
-                    value
-                  )
-                }
-              />
-
-              {/* Estimated Total Value */}
-
-              <Field
-                label="Estimated Total Value"
-                value={
-                  form.esttotalvalue
-                }
-                editing={editing}
-                type="number"
-                min="0"
-                step="0.01"
-                prefix="$"
-                onChange={(value) =>
-                  updateForm(
-                    "esttotalvalue",
-                    value
-                  )
-                }
-              />
-
-              {/* Estimated CP Value */}
-
-              <Field
-                label="Estimated CP Value"
-                value={
-                  form.estcpvalue
-                }
-                editing={editing}
-                type="number"
-                min="0"
-                step="0.01"
-                prefix="$"
-                onChange={(value) =>
-                  updateForm(
-                    "estcpvalue",
-                    value
-                  )
-                }
-              />
-
-              {/* Margin */}
-
-              <Field
-                label="Margin"
-                value={
-                  form.margin
-                }
-                editing={editing}
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                suffix="%"
-                onChange={(value) =>
-                  updateForm(
-                    "margin",
-                    value
-                  )
-                }
-              />
-
-              {/* Price / m² */}
-
-              <Field
-                label="Price / m²"
-                value={
-                  form.pricem2
-                }
-                editing={editing}
-                type="number"
-                min="0"
-                step="0.01"
-                prefix="$"
-                onChange={(value) =>
-                  updateForm(
-                    "pricem2",
-                    value
-                  )
-                }
-              />
-
-              {/* Price / Unit */}
-
-              <Field
-                label="Price / Unit"
-                value={
-                  form.priceunit
-                }
-                editing={editing}
-                type="number"
-                min="0"
-                step="0.01"
-                prefix="$"
-                onChange={(value) =>
-                  updateForm(
-                    "priceunit",
-                    value
-                  )
-                }
-              />
             </div>
           </section>
 
           {/* =================================================
               Client
-              ================================================= */}
+          ================================================= */}
 
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-6">
+          <section className="rounded-xl border border-gray-200 bg-white">
+            <div className="border-b border-gray-200 px-6 py-4">
               <h2 className="text-lg font-semibold text-gray-900">
                 Client
               </h2>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Client information linked
-                to this quote
-              </p>
             </div>
 
-            {/* Client Selection */}
+            <div className="p-6">
+              {editing && (
+                <div className="mb-5">
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    Select Client
+                  </label>
 
-            <div className="mb-5">
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Client
-              </label>
+                  <select
+                    value={form.clientId || ""}
+                    onChange={(e) =>
+                      handleClientChange(e.target.value)
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                  >
+                    <option value="">
+                      No client selected
+                    </option>
 
-              {editing ? (
-                <select
-                  value={
-                    form.clientId
-                  }
-                  onChange={(e) =>
-                    handleClientChange(
-                      e.target.value
-                    )
-                  }
-                  disabled={
-                    loadingClients
-                  }
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-1 focus:ring-gray-500 disabled:cursor-not-allowed disabled:bg-gray-100"
-                >
-                  <option value="">
-                    Select client
-                  </option>
-
-                  {clients.map(
-                    (client) => (
+                    {clients.map((client) => (
                       <option
-                        key={
-                          client.id
-                        }
-                        value={
-                          client.id
-                        }
+                        key={client.id}
+                        value={client.id}
                       >
-                        {client.name ||
-                          "Unnamed Client"}
+                        {client.name || client.id}
                       </option>
-                    )
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <ClientSnapshot client={form.client} />
+            </div>
+          </section>
+
+          {/* =================================================
+              Quote Information
+          ================================================= */}
+
+          <section className="rounded-xl border border-gray-200 bg-white">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Quote Information
+              </h2>
+            </div>
+
+            <div className="space-y-8 p-6">
+              {/* =================================================
+                  Quote Info
+              ================================================= */}
+
+              <div>
+                <h3 className="mb-4 text-base font-semibold text-gray-900">
+                  Quote Info
+                </h3>
+
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  {editing ? (
+                    <>
+                      <Field
+                        label="Estimator"
+                        value={form.estimator}
+                        onChange={(value) =>
+                          updateField("estimator", value)
+                        }
+                      />
+
+                      <Field
+                        label="Due Date"
+                        type="date"
+                        value={form.dueDate}
+                        onChange={(value) =>
+                          updateField("dueDate", value)
+                        }
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <DisplayField
+                        label="Estimator"
+                        value={form.estimator}
+                      />
+
+                      <DisplayField
+                        label="Due Date"
+                        value={formatDate(form.dueDate)}
+                      />
+                    </>
                   )}
-                </select>
+                </div>
+              </div>
+
+              {/* =================================================
+                  Project SQM Rate
+              ================================================= */}
+
+              <div>
+                <h3 className="mb-4 text-base font-semibold text-gray-900">
+                  Project SQM Rate
+                </h3>
+
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  {editing ? (
+                    <>
+                      <Field
+                        label="C&P only"
+                        type="number"
+                        value={form.cpOnlyRate}
+                        onChange={(value) =>
+                          updateField("cpOnlyRate", value)
+                        }
+                        prefix="$"
+                      />
+
+                      <Field
+                        label="C&P + Carpentry"
+                        type="number"
+                        value={form.cpCarpentryRate}
+                        onChange={(value) =>
+                          updateField("cpCarpentryRate", value)
+                        }
+                        prefix="$"
+                      />
+
+                      <Field
+                        label="C&P + Carpentry + External work"
+                        type="number"
+                        value={form.cpCarpentryExternalRate}
+                        onChange={(value) =>
+                          updateField(
+                            "cpCarpentryExternalRate",
+                            value
+                          )
+                        }
+                        prefix="$"
+                      />
+
+                      <Field
+                        label="C&P + Carpentry + Prelims"
+                        type="number"
+                        value={form.cpCarpentryPrelimsRate}
+                        onChange={(value) =>
+                          updateField(
+                            "cpCarpentryPrelimsRate",
+                            value
+                          )
+                        }
+                        prefix="$"
+                      />
+
+                      <Field
+                        label="C&P + Carpentry + External + Prelims"
+                        type="number"
+                        value={
+                          form.cpCarpentryExternalPrelimsRate
+                        }
+                        onChange={(value) =>
+                          updateField(
+                            "cpCarpentryExternalPrelimsRate",
+                            value
+                          )
+                        }
+                        prefix="$"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <DisplayField
+                        label="C&P only"
+                        value={form.cpOnlyRate}
+                        prefix="$"
+                      />
+
+                      <DisplayField
+                        label="C&P + Carpentry"
+                        value={form.cpCarpentryRate}
+                        prefix="$"
+                      />
+
+                      <DisplayField
+                        label="C&P + Carpentry + External work"
+                        value={form.cpCarpentryExternalRate}
+                        prefix="$"
+                      />
+
+                      <DisplayField
+                        label="C&P + Carpentry + Prelims"
+                        value={form.cpCarpentryPrelimsRate}
+                        prefix="$"
+                      />
+
+                      <DisplayField
+                        label="C&P + Carpentry + External + Prelims"
+                        value={
+                          form.cpCarpentryExternalPrelimsRate
+                        }
+                        prefix="$"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* =================================================
+                  Project Summary
+              ================================================= */}
+
+              <div>
+                <h3 className="mb-4 text-base font-semibold text-gray-900">
+                  Project Summary
+                </h3>
+
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  {editing ? (
+                    <>
+                      <Field
+                        label="Total sqm internal"
+                        type="number"
+                        value={form.totalSqmInternal}
+                        onChange={(value) =>
+                          updateField(
+                            "totalSqmInternal",
+                            value
+                          )
+                        }
+                        suffix="m²"
+                      />
+
+                      <Field
+                        label="Total sqm external"
+                        type="number"
+                        value={form.totalSqmExternal}
+                        onChange={(value) =>
+                          updateField(
+                            "totalSqmExternal",
+                            value
+                          )
+                        }
+                        suffix="m²"
+                      />
+
+                      <Field
+                        label="Est. Total value"
+                        type="number"
+                        value={form.esttotalvalue}
+                        onChange={(value) =>
+                          updateField(
+                            "esttotalvalue",
+                            value
+                          )
+                        }
+                        prefix="$"
+                      />
+
+                      <Field
+                        label="Margin"
+                        type="number"
+                        value={form.margin}
+                        onChange={(value) =>
+                          updateField("margin", value)
+                        }
+                        suffix="%"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <DisplayField
+                        label="Total sqm internal"
+                        value={form.totalSqmInternal}
+                        suffix=" m²"
+                      />
+
+                      <DisplayField
+                        label="Total sqm external"
+                        value={form.totalSqmExternal}
+                        suffix=" m²"
+                      />
+
+                      <DisplayField
+                        label="Est. Total value"
+                        value={form.esttotalvalue}
+                        prefix="$"
+                      />
+
+                      <DisplayField
+                        label="Margin"
+                        value={form.margin}
+                        suffix="%"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* =================================================
+              Note
+          ================================================= */}
+
+          <section className="rounded-xl border border-gray-200 bg-white">
+            <div className="border-b border-gray-200 px-6 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Note
+              </h2>
+            </div>
+
+            <div className="p-6">
+              {editing ? (
+                <>
+                  <textarea
+                    value={form.note}
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      if (value.split("\n").length <= 20) {
+                        updateField("note", value);
+                      }
+                    }}
+                    rows={8}
+                    placeholder="Enter note..."
+                    className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                  />
+
+                  <div
+                    className={`mt-2 text-right text-xs ${
+                      noteLineCount >= 20
+                        ? "text-red-500"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {noteLineCount}/20 lines
+                  </div>
+                </>
               ) : (
-                <div className="min-h-[42px] rounded-lg bg-gray-50 px-3 py-2.5 text-sm text-gray-900">
-                  {form.client
-                    .name || "-"}
+                <div className="min-h-[100px] whitespace-pre-line rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+                  {form.note || "-"}
                 </div>
               )}
             </div>
-
-            {/* Client Details */}
-
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-
-              <ClientField
-                label="Client Name"
-                field="name"
-                value={
-                  form.client.name
-                }
-                editing={editing}
-                onChange={
-                  updateClient
-                }
-              />
-
-              <ClientField
-                label="ABN"
-                field="abn"
-                value={
-                  form.client.abn
-                }
-                editing={editing}
-                onChange={
-                  updateClient
-                }
-              />
-
-              <ClientField
-                label="Contact"
-                field="contact"
-                value={
-                  form.client.contact
-                }
-                editing={editing}
-                onChange={
-                  updateClient
-                }
-              />
-
-              <ClientField
-                label="Email"
-                field="email"
-                value={
-                  form.client.email
-                }
-                editing={editing}
-                onChange={
-                  updateClient
-                }
-              />
-
-              <ClientField
-                label="Phone"
-                field="phone"
-                value={
-                  form.client.phone
-                }
-                editing={editing}
-                onChange={
-                  updateClient
-                }
-              />
-
-              <ClientField
-                label="Address"
-                field="address"
-                value={
-                  form.client.address
-                }
-                editing={editing}
-                onChange={
-                  updateClient
-                }
-              />
-            </div>
           </section>
 
           {/* =================================================
-              Notes
-              ================================================= */}
+              Follow Up / Actions
+          ================================================= */}
 
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-6">
+          <section className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                Notes
+                Follow Up / Actions
               </h2>
-            </div>
-
-            {editing ? (
-              <textarea
-                value={form.note}
-                onChange={(e) =>
-                  updateForm(
-                    "note",
-                    e.target.value
-                  )
-                }
-                rows={5}
-                placeholder="Enter notes..."
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-              />
-            ) : (
-              <div className="min-h-[100px] whitespace-pre-wrap rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-900">
-                {form.note || "-"}
-              </div>
-            )}
-          </section>
-
-          {/* =================================================
-              Quote Items
-              ================================================= */}
-
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Feedback
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Quote activity and
-                  follow-up records
-                </p>
-              </div>
 
               {editing && (
                 <button
@@ -1486,151 +1162,117 @@ export default function QuoteDetailPage() {
                   onClick={addItem}
                   className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
-                  + Add Item
+                  + Add Action
                 </button>
               )}
             </div>
 
-            {form.items.length ===
-            0 ? (
-              <div className="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-                No Feedback
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {form.items.map(
-                  (item, index) => (
+            <div className="p-6">
+              {!editing ? (
+                form.items && form.items.length > 0 ? (
+                  <div className="space-y-3">
+                    {form.items.map((item, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 md:grid-cols-12"
+                      >
+                        <div className="md:col-span-3">
+                          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Date
+                          </div>
+
+                          <div className="text-sm text-gray-800">
+                            {formatDate(item.date)}
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-9">
+                          <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Action
+                          </div>
+
+                          <div className="whitespace-pre-line text-sm text-gray-800">
+                            {item.action || "-"}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
+                    No actions recorded.
+                  </div>
+                )
+              ) : (
+                <div className="space-y-3">
+                  {(form.items || []).map((item, index) => (
                     <div
                       key={index}
-                      className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 p-4 md:grid-cols-[180px_1fr_auto]"
+                      className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 md:grid-cols-12"
                     >
-                      {/* Date */}
-
-                      <div>
-                        <label className="mb-1.5 block text-xs font-medium text-gray-500">
+                      <div className="md:col-span-3">
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
                           Date
                         </label>
 
-                        {editing ? (
-                          <input
-                            type="date"
-                            value={
-                              item.date ||
-                              ""
-                            }
-                            onChange={(
-                              e
-                            ) =>
-                              updateItem(
-                                index,
-                                "date",
-                                e.target
-                                  .value
-                              )
-                            }
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                          />
-                        ) : (
-                          <div className="py-2 text-sm text-gray-900">
-                            {item.date ||
-                              "-"}
-                          </div>
-                        )}
+                        <input
+                          type="date"
+                          value={item.date || ""}
+                          onChange={(e) =>
+                            updateItem(
+                              index,
+                              "date",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                        />
                       </div>
 
-                      {/* Action */}
-
-                      <div>
-                        <label className="mb-1.5 block text-xs font-medium text-gray-500">
+                      <div className="md:col-span-8">
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
                           Action
                         </label>
 
-                        {editing ? (
-                          <input
-                            type="text"
-                            value={
-                              item.action ||
-                              ""
-                            }
-                            onChange={(
-                              e
-                            ) =>
-                              updateItem(
-                                index,
-                                "action",
-                                e.target
-                                  .value
-                              )
-                            }
-                            placeholder="Enter action..."
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500"
-                          />
-                        ) : (
-                          <div className="py-2 text-sm text-gray-900">
-                            {item.action ||
-                              "-"}
-                          </div>
-                        )}
+                        <input
+                          type="text"
+                          value={item.action || ""}
+                          onChange={(e) =>
+                            updateItem(
+                              index,
+                              "action",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Enter action..."
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                        />
                       </div>
 
-                      {/* Remove */}
-
-                      {editing && (
-                        <div className="flex items-end">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeItem(
-                                index
-                              )
-                            }
-                            className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex items-end md:col-span-1">
+                        <button
+                          type="button"
+                          onClick={() => removeItem(index)}
+                          disabled={form.items.length <= 1}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          title={
+                            form.items.length <= 1
+                              ? "At least one action row is required"
+                              : "Remove action"
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  )
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* =================================================
-              Bottom Actions
-              ================================================= */}
-
-          {editing && (
-            <div className="flex justify-end gap-3 pb-8">
-              <button
-                type="button"
-                onClick={
-                  handleCancel
-                }
-                disabled={saving}
-                className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={
-                  saving ||
-                  loadingClients
-                }
-                className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {saving
-                  ? "Saving..."
-                  : "Save Changes"}
-              </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
+

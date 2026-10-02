@@ -83,9 +83,6 @@ export default function QuotePage() {
             dueDate:
               quoteData.dueDate || "",
 
-            chasingDate:
-              quoteData.chasingDate || "",
-
             /* ---------------------------------------------
                Estimator
             --------------------------------------------- */
@@ -305,10 +302,6 @@ export default function QuotePage() {
               </th>
 
               <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-500">
-                Chasing Date
-              </th>
-
-              <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-500">
                 Estimator
               </th>
 
@@ -382,12 +375,6 @@ export default function QuotePage() {
 
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {quote.dueDate || "-"}
-                    </td>
-
-                    {/* Chasing Date */}
-
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {quote.chasingDate || "-"}
                     </td>
 
                     {/* Estimator */}

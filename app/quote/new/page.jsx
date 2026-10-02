@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -10,11 +11,11 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-
 import { db } from "@/lib/firebase";
 
 export default function NewquotePage() {
   const router = useRouter();
+
   /* =====================================================
      Clients
   ===================================================== */
@@ -34,18 +35,33 @@ export default function NewquotePage() {
     status: "Pending",
 
     dueDate: new Date().toISOString().split("T")[0],
-    chasingDate: "",
 
     siteAddress: "",
 
     note: "",
 
+    /* Quote Info */
+
     estimator: "",
 
-    esttotalvalue: "",
-    estcpvalue: "",
+    /* Project SQM Rate */
 
+    cpOnlyRate: "",
+    cpCarpentryRate: "",
+    cpCarpentryExternalRate: "",
+    cpCarpentryPrelimsRate: "",
+    cpCarpentryExternalPrelimsRate: "",
+
+    /* Project Summary */
+
+    totalSqmInternal: "",
+    totalSqmExternal: "",
+    esttotalvalue: "",
     margin: "",
+
+    /* Existing fields */
+
+    estcpvalue: "",
     pricem2: "",
     priceunit: "",
   });
@@ -200,18 +216,8 @@ export default function NewquotePage() {
          Validation
       --------------------------------------------- */
 
-      if (!form.projectNo.trim()) {
-        setError("Please enter a project number.");
-        return;
-      }
-
       if (!form.projectName.trim()) {
         setError("Please enter a project name.");
-        return;
-      }
-
-      if (!selectedClient) {
-        setError("Please select a client.");
         return;
       }
 
@@ -228,13 +234,11 @@ export default function NewquotePage() {
 
       /* ---------------------------------------------
          Quote Data
-         
+
          Project information is manually entered.
          There is NO projectId relationship.
-         
-         Client still uses:
-         clientId = relationship
-         client = snapshot
+
+         Client is optional.
       --------------------------------------------- */
 
       const quoteData = {
@@ -247,7 +251,6 @@ export default function NewquotePage() {
         projectName: form.projectName,
 
         dueDate: form.dueDate,
-        chasingDate: form.chasingDate,
 
         status: form.status,
 
@@ -256,39 +259,69 @@ export default function NewquotePage() {
         note: form.note,
 
         /* ---------------------------------------------
-           Estimation
+           Quote Info
         --------------------------------------------- */
 
         estimator: form.estimator,
 
+        /* ---------------------------------------------
+           Project SQM Rate
+        --------------------------------------------- */
+
+        cpOnlyRate: form.cpOnlyRate,
+        cpCarpentryRate: form.cpCarpentryRate,
+        cpCarpentryExternalRate:
+          form.cpCarpentryExternalRate,
+        cpCarpentryPrelimsRate:
+          form.cpCarpentryPrelimsRate,
+        cpCarpentryExternalPrelimsRate:
+          form.cpCarpentryExternalPrelimsRate,
+
+        /* ---------------------------------------------
+           Project Summary
+        --------------------------------------------- */
+
+        totalSqmInternal: form.totalSqmInternal,
+        totalSqmExternal: form.totalSqmExternal,
+
         esttotalvalue: form.esttotalvalue,
-        estcpvalue: form.estcpvalue,
 
         // Margin is entered manually as a percentage.
         margin: form.margin,
 
-        // Prices are entered manually.
+        /* ---------------------------------------------
+           Existing Estimation Fields
+        --------------------------------------------- */
+
+        estcpvalue: form.estcpvalue,
         pricem2: form.pricem2,
         priceunit: form.priceunit,
 
         /* ---------------------------------------------
            Client Relationship
-           
-           clientId = relationship
-           client = snapshot
+
+           Client is optional.
+
+           If no client is selected:
+           clientId = ""
+           client = null
         --------------------------------------------- */
 
-        clientId: selectedClient.id,
+        clientId: selectedClient
+          ? selectedClient.id
+          : "",
 
-        client: {
-          id: selectedClient.id,
-          name: selectedClient.name || "",
-          abn: selectedClient.abn || "",
-          contact: selectedClient.contact || "",
-          email: selectedClient.email || "",
-          phone: selectedClient.phone || "",
-          address: selectedClient.address || "",
-        },
+        client: selectedClient
+          ? {
+              id: selectedClient.id,
+              name: selectedClient.name || "",
+              abn: selectedClient.abn || "",
+              contact: selectedClient.contact || "",
+              email: selectedClient.email || "",
+              phone: selectedClient.phone || "",
+              address: selectedClient.address || "",
+            }
+          : null,
 
         /* ---------------------------------------------
            Follow Up / Action Items
@@ -324,7 +357,6 @@ export default function NewquotePage() {
       console.log("Quote created:", docRef.id);
 
       router.push("/quote");
-   
     } catch (err) {
       console.error(
         "Error creating quote:",
@@ -403,23 +435,6 @@ export default function NewquotePage() {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            {/* Project No. */}
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Project No.
-              </label>
-
-              <input
-                type="text"
-                name="projectNo"
-                value={form.projectNo}
-                onChange={handleChange}
-                placeholder="Enter project number"
-                className="w-full rounded-lg border border-gray-300 px-4 py-3"
-              />
-            </div>
-
             {/* Project Name */}
 
             <div>
@@ -476,6 +491,23 @@ export default function NewquotePage() {
               </select>
             </div>
 
+            {/* Site Address */}
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Site Address
+              </label>
+
+              <textarea
+                name="siteAddress"
+                value={form.siteAddress}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Enter project/site address"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3"
+              />
+            </div>
+
           </div>
         </section>
 
@@ -495,7 +527,7 @@ export default function NewquotePage() {
             </p>
           ) : clients.length === 0 ? (
             <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800">
-              No clients found. Please create a client first.
+              No clients found. Client can be left blank.
             </div>
           ) : (
             <div>
@@ -510,7 +542,7 @@ export default function NewquotePage() {
                 className="w-full rounded-lg border px-4 py-3"
               >
                 <option value="">
-                  Select client
+                  Select client (optional)
                 </option>
 
                 {clients.map((client) => (
@@ -606,222 +638,301 @@ export default function NewquotePage() {
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
 
-          <h2 className="mb-5 text-xl font-semibold">
+          <h2 className="mb-6 text-xl font-semibold">
             Quote Information
           </h2>
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          {/* =================================================
+              Quote Info
+          ================================================= */}
 
-            {/* Due Date */}
+          <div className="mb-8">
 
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Due Date
-              </label>
+            <h3 className="mb-4 text-base font-semibold text-gray-800">
+              Quote Info
+            </h3>
 
-              <input
-                type="date"
-                name="dueDate"
-                value={form.dueDate}
-                onChange={handleChange}
-                className="w-full rounded-lg border px-4 py-3"
-              />
-            </div>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            {/* Chasing Date */}
+              {/* Estimator */}
 
-            <div>
-              <label className="mb-2 block text-sm font-medium">
-                Chasing Date
-              </label>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Estimator
+                </label>
 
-              <input
-                type="date"
-                name="chasingDate"
-                value={form.chasingDate}
-                onChange={handleChange}
-                className="w-full rounded-lg border px-4 py-3"
-              />
+                <input
+                  type="text"
+                  name="estimator"
+                  value={form.estimator}
+                  onChange={handleChange}
+                  placeholder="Estimator name"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                />
+              </div>
+
+              {/* Due Date */}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Due Date
+                </label>
+
+                <input
+                  type="date"
+                  name="dueDate"
+                  value={form.dueDate}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                />
+              </div>
+
             </div>
 
           </div>
 
-        </section>
+          {/* =================================================
+              Project SQM Rate
+          ================================================= */}
 
-        {/* =================================================
-            Site Address
-        ================================================= */}
+          <div className="mb-8">
 
-        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-base font-semibold text-gray-800">
+              Project SQM Rate
+            </h3>
 
-          <h2 className="mb-5 text-xl font-semibold">
-            Site Address
-          </h2>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
 
-          <textarea
-            name="siteAddress"
-            value={form.siteAddress}
-            onChange={handleChange}
-            rows={3}
-            placeholder="Enter project/site address"
-            className="w-full rounded-lg border px-4 py-3"
-          />
+              {/* C&P only */}
 
-        </section>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  C&amp;P only
+                </label>
 
-        {/* =================================================
-            Estimation
-        ================================================= */}
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                    $
+                  </span>
 
-        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="cpOnlyRate"
+                    value={form.cpOnlyRate}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  />
+                </div>
+              </div>
 
-          <h2 className="mb-5 text-xl font-semibold">
-            Estimation
-          </h2>
+              {/* C&P + Carpentry */}
 
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  C&amp;P + Carpentry
+                </label>
 
-            {/* Estimator */}
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                    $
+                  </span>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Estimator
-              </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="cpCarpentryRate"
+                    value={form.cpCarpentryRate}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  />
+                </div>
+              </div>
 
-              <input
-                type="text"
-                name="estimator"
-                value={form.estimator}
-                onChange={handleChange}
-                placeholder="Estimator name"
-                className="w-full rounded-lg border border-gray-300 px-4 py-3"
-              />
+              {/* C&P + Carpentry + External work */}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  C&amp;P + Carpentry + External work
+                </label>
+
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                    $
+                  </span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="cpCarpentryExternalRate"
+                    value={form.cpCarpentryExternalRate}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  />
+                </div>
+              </div>
+
+              {/* C&P + Carpentry + Prelims */}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  C&amp;P + Carpentry + Prelims
+                </label>
+
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                    $
+                  </span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="cpCarpentryPrelimsRate"
+                    value={form.cpCarpentryPrelimsRate}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  />
+                </div>
+              </div>
+
+              {/* C&P + Carpentry + External + Prelims */}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  C&amp;P + Carpentry + External + Prelims
+                </label>
+
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                    $
+                  </span>
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="cpCarpentryExternalPrelimsRate"
+                    value={form.cpCarpentryExternalPrelimsRate}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  />
+                </div>
+              </div>
+
             </div>
 
-            {/* Estimated Total Value */}
+          </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Est. Total Value
-              </label>
+          {/* =================================================
+              Project Summary
+          ================================================= */}
 
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
-                  $
-                </span>
+          <div>
+
+            <h3 className="mb-4 text-base font-semibold text-gray-800">
+              Project Summary
+            </h3>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+
+              {/* Total sqm internal */}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Total sqm internal
+                </label>
 
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  name="esttotalvalue"
-                  value={form.esttotalvalue}
+                  name="totalSqmInternal"
+                  value={form.totalSqmInternal}
                   onChange={handleChange}
                   placeholder="0.00"
-                  className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3"
                 />
               </div>
-            </div>
 
-            {/* Estimated C&P Value */}
+              {/* Total sqm external */}
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Est. C&P Value
-              </label>
-
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
-                  $
-                </span>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Total sqm external
+                </label>
 
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  name="estcpvalue"
-                  value={form.estcpvalue}
+                  name="totalSqmExternal"
+                  value={form.totalSqmExternal}
                   onChange={handleChange}
                   placeholder="0.00"
-                  className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3"
                 />
               </div>
-            </div>
 
-            {/* Margin */}
+              {/* Est. Total value */}
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Margin
-              </label>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Est. Total value
+                </label>
 
-              <div className="relative">
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  name="margin"
-                  value={form.margin}
-                  onChange={handleChange}
-                  placeholder="0"
-                  className="w-full rounded-lg border border-gray-300 px-4 py-3 pr-10"
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                    $
+                  </span>
 
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">
-                  %
-                </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="esttotalvalue"
+                    value={form.esttotalvalue}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Price / m² */}
+              {/* Margin */}
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Price / m²
-              </label>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Margin
+                </label>
 
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
-                  $
-                </span>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    name="margin"
+                    value={form.margin}
+                    onChange={handleChange}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 pr-10"
+                  />
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  name="pricem2"
-                  value={form.pricem2}
-                  onChange={handleChange}
-                  placeholder="0.00"
-                  className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
-                />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">
+                    %
+                  </span>
+                </div>
               </div>
-            </div>
 
-            {/* Price / Unit */}
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Price / Unit
-              </label>
-
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
-                  $
-                </span>
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  name="priceunit"
-                  value={form.priceunit}
-                  onChange={handleChange}
-                  placeholder="0.00"
-                  className="w-full rounded-lg border border-gray-300 py-3 pl-8 pr-4"
-                />
-              </div>
             </div>
 
           </div>
@@ -988,3 +1099,4 @@ export default function NewquotePage() {
     </div>
   );
 }
+

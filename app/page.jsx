@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -117,15 +116,11 @@ export default function HomePage() {
           const dueToday =
             isSameDate(data.dueDate, today);
 
-          const chasingToday =
-            isSameDate(data.chasingDate, today);
-
-          if (dueToday || chasingToday) {
+          if (dueToday) {
             quotes.push({
               id: doc.id,
               ...data,
               dueToday,
-              chasingToday,
             });
           }
         });
@@ -416,12 +411,6 @@ export default function HomePage() {
                             {quote.dueToday && (
                               <AttentionBadge>
                                 Due Today
-                              </AttentionBadge>
-                            )}
-
-                            {quote.chasingToday && (
-                              <AttentionBadge>
-                                Chasing Today
                               </AttentionBadge>
                             )}
 

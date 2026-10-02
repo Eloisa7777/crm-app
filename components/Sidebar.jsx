@@ -45,6 +45,7 @@ export default function Sidebar({ role }) {
   const pathname = usePathname();
 
   const isPOUser = role === "yjpo";
+  const isESTUser = role === "yjest";
 
   // yjpo can only access suppliers and purchase orders
   const visibleMenuItems = isPOUser
@@ -53,6 +54,11 @@ export default function Sidebar({ role }) {
           item.href === "/suppliers" ||
           item.href === "/purchase-orders"
       )
+      : isESTUser
+      ? menuItems.filter(
+          (item) =>
+            item.href === "/quote"
+        )
     : menuItems;
 
   return (
@@ -91,6 +97,7 @@ export default function Sidebar({ role }) {
                   }
                 `}
               >
+
                 <span className="w-5 text-center text-base">
                   {item.icon}
                 </span>
@@ -101,7 +108,6 @@ export default function Sidebar({ role }) {
               </Link>
             );
           })}
-
         </div>
       </nav>
 
@@ -111,17 +117,17 @@ export default function Sidebar({ role }) {
         <div className="flex items-center gap-3">
 
           <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold">
-            {isPOUser ? "PO" : "YJ"}
+            {isPOUser ? "PO" : isESTUser ? "EST" : "YJ"}
           </div>
 
           <div className="min-w-0">
 
             <div className="text-sm font-medium text-white truncate">
-              {isPOUser ? "YJ PO" : "YJ Building"}
+              {isPOUser ? "YJ PO" : isESTUser ? "YJ Estimator" : "YJ Building"}
             </div>
 
             <div className="text-xs text-gray-400 truncate">
-              {isPOUser ? "Purchase Orders" : "Administration"}
+              {isPOUser ? "Purchase Orders" : isESTUser ? "Quote Management" : "Administration"}
             </div>
 
           </div>
