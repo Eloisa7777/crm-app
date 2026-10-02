@@ -347,13 +347,16 @@ function StatusBadge({ status }) {
       "bg-gray-100 text-gray-700",
 
     Issued:
-      "bg-blue-50 text-blue-700",
+      "bg-blue-200 text-blue-700",
+
+    Approved:
+      "bg-purple-200 text-purple-700",
 
     Paid:
-      "bg-green-50 text-green-700",
+      "bg-green-200 text-green-700",
 
     Cancelled:
-      "bg-red-50 text-red-700",
+      "bg-red-200 text-red-700",
   };
 
   return (
