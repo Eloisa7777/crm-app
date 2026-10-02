@@ -253,7 +253,7 @@ export default function PurchaseOrderPDF({ data }) {
 
           <View style={styles.companyRight}>
             <Text>29 Brandl St, Eight Mile Plains QLD 4113</Text>
-            <Text>leo.l@yjliningscreation.com.au</Text>
+            <Text>account@yjliningscreation.com.au</Text>
           </View>
         </View>
 
@@ -268,11 +268,11 @@ export default function PurchaseOrderPDF({ data }) {
         <View style={styles.topInfo}>
           <View style={styles.supplierSection}>
             <Text style={styles.sectionTitle}>
-              SUPPLIER
+              SUBCONTRACTOR / SUPPLIER
             </Text>
 
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Supplier:</Text>
+              <Text style={styles.label}>Subcontractor / Supplier:</Text>
               <Text style={styles.value}>
                 {data.supplier?.name || ""}
               </Text>

@@ -487,7 +487,7 @@ const {
             <Text
               style={styles.companyText}
             >
-              Email: leo.l@yjliningscreation.com.au
+              Email: account@yjliningscreation.com.au
             </Text>
 
              <Text
