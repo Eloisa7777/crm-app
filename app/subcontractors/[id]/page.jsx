@@ -131,7 +131,7 @@ export default function SubcontractorDetailsPage() {
 
         const q = query(
           poRef,
-          where("subcontractorId", "==", params.id)
+          where("supplierId", "==", params.id)
         );
 
         const snapshot = await getDocs(q);
