@@ -20,8 +20,13 @@ const menuItems = [
     icon: "▣",
   },
   {
-    name: "Suppliers/Subcontractors",
+    name: "Suppliers",
     href: "/suppliers",
+    icon: "♙",
+  },
+    {
+    name: "Subcontractors",
+    href: "/subcontractors",
     icon: "♙",
   },
   {
@@ -52,6 +57,7 @@ export default function Sidebar({ role }) {
     ? menuItems.filter(
         (item) =>
           item.href === "/suppliers" ||
+          item.href === "/subcontractors" ||
           item.href === "/purchase-orders"
       )
       : isESTUser

@@ -200,7 +200,7 @@ export default function PurchaseOrdersPage() {
               </th>
 
               <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase">
-                Supplier
+                Supplier/Subcontractor
               </th>
 
               <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase">

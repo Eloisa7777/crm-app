@@ -6,8 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState([]);
+export default function SubcontractorsPage() {
+  const [subcontractors, setSubcontractors] = useState([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
 
@@ -15,67 +15,67 @@ export default function SuppliersPage() {
   const [error, setError] = useState("");
 
   /* =========================
-     Load Suppliers from Firebase
+     Load Subcontractors from Firebase
   ========================= */
 
   useEffect(() => {
-    async function loadSuppliers() {
+    async function loadSubcontractors() {
       try {
         setLoading(true);
         setError("");
 
         const snapshot = await getDocs(
-          collection(db, "Suppliers")
+          collection(db, "Subcontractors")
         );
 
         const data = snapshot.docs.map((doc) => {
-          const supplier = doc.data();
+          const subcontractor = doc.data();
 
           return {
             id: doc.id,
-            name: supplier.name || "",
-            abn: supplier.abn || "",
-            contact: supplier.contact || "",
-            email: supplier.email || "",
-            phone: supplier.phone || "-",
-            address: supplier.address || "-",
-            status: supplier.status || "Active",
-            orders: supplier.orders || 0,
-            total: supplier.total || 0,
+            name: subcontractor.name || "",
+            abn: subcontractor.abn || "",
+            contact: subcontractor.contact || "",
+            email: subcontractor.email || "",
+            phone: subcontractor.phone || "-",
+            address: subcontractor.address || "-",
+            status: subcontractor.status || "Active",
+            orders: subcontractor.orders || 0,
+            total: subcontractor.total || 0,
           };
         });
 
-        setSuppliers(data);
+        setSubcontractors(data);
       } catch (error) {
-        console.error("Failed to load suppliers:", error);
-        setError("Failed to load suppliers.");
+        console.error("Failed to load subcontractors:", error);
+        setError("Failed to load subcontractors.");
       } finally {
         setLoading(false);
       }
     }
 
-    loadSuppliers();
+    loadSubcontractors();
   }, []);
 
   /* =========================
      Search + Status Filter
   ========================= */
 
-  const filteredSuppliers = useMemo(() => {
-    return suppliers.filter((supplier) => {
+  const filteredSubcontractors = useMemo(() => {
+    return subcontractors.filter((subcontractor) => {
       const searchText = search.toLowerCase();
 
       const matchesSearch =
-        supplier.name.toLowerCase().includes(searchText) ||
-        supplier.contact.toLowerCase().includes(searchText) ||
-        supplier.email.toLowerCase().includes(searchText);
+        subcontractor.name.toLowerCase().includes(searchText) ||
+        subcontractor.contact.toLowerCase().includes(searchText) ||
+        subcontractor.email.toLowerCase().includes(searchText);
 
       const matchesStatus =
-        status === "All" || supplier.status === status;
+        status === "All" || subcontractor.status === status;
 
       return matchesSearch && matchesStatus;
     });
-  }, [suppliers, search, status]);
+  }, [subcontractors, search, status]);
 
   /* =========================
      Loading
@@ -87,18 +87,18 @@ export default function SuppliersPage() {
         <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">
-              Suppliers
+              Subcontractors
             </h1>
 
             <p className="text-sm text-gray-500 mt-1">
-              Loading suppliers...
+              Loading subcontractors...
             </p>
           </div>
         </header>
 
         <div className="p-8">
           <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-sm text-gray-500">
-            Loading suppliers from Firebase...
+            Loading subcontractors from Firebase...
           </div>
         </div>
       </div>
@@ -115,11 +115,11 @@ export default function SuppliersPage() {
         <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">
-              Suppliers
+              Subcontractors
             </h1>
 
             <p className="text-sm text-gray-500 mt-1">
-              Manage your suppliers and subcontractors
+              Manage your subcontractors
             </p>
           </div>
         </header>
@@ -147,19 +147,19 @@ export default function SuppliersPage() {
 
         <div>
           <h1 className="text-xl font-semibold text-gray-900">
-            Suppliers
+            Subcontractors
           </h1>
 
           <p className="text-sm text-gray-500 mt-1">
-            Manage your suppliers
+            Manage your subcontractors
           </p>
         </div>
 
         <Link
-          href="/suppliers/new"
+          href="/subcontractors/new"
           className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
         >
-          + New Supplier
+          + New Subcontractor
         </Link>
 
       </header>
@@ -177,7 +177,7 @@ export default function SuppliersPage() {
 
               <input
                 type="text"
-                placeholder="Search suppliers..."
+                placeholder="Search subcontractors..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="input"
@@ -206,12 +206,12 @@ export default function SuppliersPage() {
           <div className="px-6 py-5 border-b border-gray-200">
 
             <h2 className="text-base font-semibold text-gray-900">
-              Supplier List
+              Subcontractor List
             </h2>
 
             <p className="text-sm text-gray-500 mt-1">
-              {filteredSuppliers.length} supplier
-              {filteredSuppliers.length !== 1 ? "s" : ""} found
+              {filteredSubcontractors.length} subcontractor
+              {filteredSubcontractors.length !== 1 ? "s" : ""} found
             </p>
 
           </div>
@@ -225,7 +225,7 @@ export default function SuppliersPage() {
                 <tr className="border-b border-gray-200 text-left bg-gray-50">
 
                   <th className="px-6 py-3 font-medium text-gray-500">
-                    Supplier
+                    Subcontractor
                   </th>
 
                   <th className="px-6 py-3 font-medium text-gray-500">
@@ -254,53 +254,53 @@ export default function SuppliersPage() {
 
               <tbody>
 
-                {filteredSuppliers.map((supplier) => (
+                {filteredSubcontractors.map((subcontractor) => (
 
                   <tr
-                    key={supplier.id}
+                    key={subcontractor.id}
                     className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
                   >
 
                     <td className="px-6 py-4">
 
                       <Link
-                        href={`/suppliers/${supplier.id}`}
+                        href={`/subcontractors/${subcontractor.id}`}
                         className="font-medium text-gray-900 hover:underline"
                       >
-                        {supplier.name}
+                        {subcontractor.name}
                       </Link>
 
                       <div className="text-xs text-gray-500 mt-1">
-                        ABN {supplier.abn}
+                        ABN {subcontractor.abn}
                       </div>
 
                     </td>
 
 
                     <td className="px-6 py-4 text-gray-600">
-                      {supplier.contact}
+                      {subcontractor.contact}
                     </td>
 
 
                     <td className="px-6 py-4 text-gray-600">
-                      {supplier.phone}
+                      {subcontractor.phone}
                     </td>
 
 
                     <td className="px-6 py-4 text-gray-600">
-                      {supplier.email}
+                      {subcontractor.email}
                     </td>
 
 
                     <td className="px-6 py-4">
-                      <StatusBadge status={supplier.status} />
+                      <StatusBadge status={subcontractor.status} />
                     </td>
 
 
                     <td className="px-6 py-4 text-right">
 
                       <Link
-                        href={`/suppliers/${supplier.id}`}
+                        href={`/subcontractors/${subcontractor.id}`}
                         className="text-sm font-medium text-gray-700 hover:text-gray-900"
                       >
                         View
@@ -319,9 +319,9 @@ export default function SuppliersPage() {
           </div>
 
 
-          {filteredSuppliers.length === 0 && (
+          {filteredSubcontractors.length === 0 && (
             <div className="px-6 py-12 text-center text-sm text-gray-500">
-              No suppliers found.
+              No subcontractors found.
             </div>
           )}
 

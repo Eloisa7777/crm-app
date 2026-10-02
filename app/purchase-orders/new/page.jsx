@@ -1,6 +1,6 @@
 
 "use client";
-
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -15,12 +15,19 @@ import { db } from "@/lib/firebase";
 import PurchaseOrderPDF from "@/components/PurchaseOrderPDF";
 
 export default function NewPurchaseOrderPage() {
+  const router = useRouter();
   /* =====================================================
-     Suppliers
+     Supplier / Subcontractor Type
+  ===================================================== */
+
+  const [supplierType, setSupplierType] = useState("");
+
+  /* =====================================================
+     Suppliers / Subcontractors
   ===================================================== */
 
   const [suppliers, setSuppliers] = useState([]);
-  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
 
   /* =====================================================
@@ -37,7 +44,7 @@ export default function NewPurchaseOrderPage() {
 
   const [form, setForm] = useState({
     poNumber: "",
-    projectName: "Select project",
+    projectName: "",
     status: "Draft",
     poDate: new Date().toISOString().split("T")[0],
     deliveryDate: "",
@@ -55,7 +62,7 @@ export default function NewPurchaseOrderPage() {
 
   const [items, setItems] = useState([
     {
-      description: "Level",
+      description: "Ground Floor",
       qty: 1,
       unitPrice: "",
     },
@@ -68,41 +75,6 @@ export default function NewPurchaseOrderPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  /* =====================================================
-     Load Suppliers
-  ===================================================== */
-
-  useEffect(() => {
-    const loadSuppliers = async () => {
-      try {
-        setLoadingSuppliers(true);
-        setError("");
-
-        const snapshot = await getDocs(
-          collection(db, "Suppliers")
-        );
-
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        setSuppliers(data);
-
-        if (data.length > 0) {
-          setSelectedSupplierId(data[0].id);
-        }
-      } catch (err) {
-        console.error("Error loading suppliers:", err);
-        setError("Failed to load suppliers.");
-      } finally {
-        setLoadingSuppliers(false);
-      }
-    };
-
-    loadSuppliers();
-  }, []);
 
   /* =====================================================
      Load Projects
@@ -125,15 +97,13 @@ export default function NewPurchaseOrderPage() {
 
         setProjects(data);
 
-        // Select
-        if (data.length > 0) {
+        // Do not automatically select the first project
         setSelectedProjectId("");
 
         setForm((prev) => ({
           ...prev,
-          projectName: data[0].name || data[0].projectName || "",
+          projectName: "",
         }));
-      }
       } catch (err) {
         console.error("Error loading projects:", err);
         setError("Failed to load projects.");
@@ -146,7 +116,61 @@ export default function NewPurchaseOrderPage() {
   }, []);
 
   /* =====================================================
-     Selected Supplier
+     Load Supplier / Subcontractor
+     
+     Supplier      -> Suppliers
+     Subcontractor -> Subcontractors
+  ===================================================== */
+
+  useEffect(() => {
+    const loadSupplierData = async () => {
+      if (!supplierType) {
+        setSuppliers([]);
+        setSelectedSupplierId("");
+        return;
+      }
+
+      try {
+        setLoadingSuppliers(true);
+        setError("");
+
+        const collectionName =
+          supplierType === "Supplier"
+            ? "Suppliers"
+            : "Subcontractors";
+
+        const snapshot = await getDocs(
+          collection(db, collectionName)
+        );
+
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setSuppliers(data);
+
+        // Do not automatically select the first record
+        setSelectedSupplierId("");
+      } catch (err) {
+        console.error(
+          `Error loading ${supplierType.toLowerCase()}s:`,
+          err
+        );
+
+        setError(
+          `Failed to load ${supplierType.toLowerCase()}s.`
+        );
+      } finally {
+        setLoadingSuppliers(false);
+      }
+    };
+
+    loadSupplierData();
+  }, [supplierType]);
+
+  /* =====================================================
+     Selected Supplier / Subcontractor
   ===================================================== */
 
   const selectedSupplier = useMemo(() => {
@@ -166,23 +190,52 @@ export default function NewPurchaseOrderPage() {
   }, [projects, selectedProjectId]);
 
   /* =====================================================
+     Supplier Type Change
+  ===================================================== */
+
+  const handleSupplierTypeChange = (e) => {
+    const type = e.target.value;
+
+    // Clear the current supplier/subcontractor
+    setSupplierType(type);
+    setSelectedSupplierId("");
+    setSuppliers([]);
+    setError("");
+  };
+
+  /* =====================================================
+     Supplier / Subcontractor Change
+  ===================================================== */
+
+  const handleSupplierChange = (e) => {
+    setSelectedSupplierId(e.target.value);
+  };
+
+  /* =====================================================
      Project Change
   ===================================================== */
 
-    const handleProjectChange = (e) => {
-      const projectId = e.target.value;
+  const handleProjectChange = (e) => {
+    const projectId = e.target.value;
 
-      const project = projects.find(
-        (item) => item.id === projectId
-      );
+    const project = projects.find(
+      (item) => item.id === projectId
+    );
 
-      setSelectedProjectId(projectId);
+    setSelectedProjectId(projectId);
 
-      setForm((prev) => ({
-        ...prev,
-        projectName: project?.name || "",
-      }));
-    };
+    setForm((prev) => ({
+      ...prev,
+      projectName:
+        project?.name ||
+        project?.projectName ||
+        "",
+      siteAddress:
+        project?.siteAddress ||
+        project?.address ||
+        "",
+    }));
+  };
 
   /* =====================================================
      Form Change
@@ -281,8 +334,17 @@ export default function NewPurchaseOrderPage() {
         return;
       }
 
+      if (!supplierType) {
+        setError(
+          "Please select Supplier or Subcontractor."
+        );
+        return;
+      }
+
       if (!selectedSupplier) {
-        setError("Please select a supplier.");
+        setError(
+          `Please select a ${supplierType.toLowerCase()}.`
+        );
         return;
       }
 
@@ -297,6 +359,7 @@ export default function NewPurchaseOrderPage() {
         /* ---------------------------------------------
            PO Information
         --------------------------------------------- */
+
         poNumber: form.poNumber.trim(),
         poDate: form.poDate,
         deliveryDate: form.deliveryDate,
@@ -306,18 +369,40 @@ export default function NewPurchaseOrderPage() {
            projectId = relationship
            projectName = snapshot/display value
         --------------------------------------------- */
+
         projectId: selectedProject.id,
-        projectName: selectedProject.name || "",
-        status: "Draft",
+
+        projectName:
+          selectedProject.name ||
+          selectedProject.projectName ||
+          "",
+
+        status: form.status,
 
         siteAddress: form.siteAddress,
         scopeOfWork: form.scopeOfWork,
+
+        /* ---------------------------------------------
+           YJ Site Contact
+        --------------------------------------------- */
 
         projectManager: form.projectManager,
         projectManagerEmail: form.projectManagerEmail,
 
         siteManager: form.siteManager,
         siteManagerEmail: form.siteManagerEmail,
+
+        /* ---------------------------------------------
+           Supplier / Subcontractor
+           
+           supplierType tells us which collection
+           the selected record came from.
+           
+           Supplier      -> Suppliers
+           Subcontractor -> Subcontractors
+        --------------------------------------------- */
+
+        supplierType,
 
         supplierId: selectedSupplier.id,
 
@@ -368,13 +453,15 @@ export default function NewPurchaseOrderPage() {
       );
 
       console.log("PO created:", docRef.id);
-
+      router.push("/purchase-orders");
+      
       setShowPreview(true);
     } catch (err) {
       console.error("Error creating PO:", err);
 
       setError(
-        err.message || "Failed to create purchase order."
+        err.message ||
+          "Failed to create purchase order."
       );
     } finally {
       setSaving(false);
@@ -390,7 +477,10 @@ export default function NewPurchaseOrderPage() {
     poDate: form.poDate,
     deliveryDate: form.deliveryDate,
 
-    projectName: selectedProject?.name || "",
+    projectName:
+      selectedProject?.name ||
+      selectedProject?.projectName ||
+      "",
 
     siteAddress: form.siteAddress,
 
@@ -430,7 +520,9 @@ export default function NewPurchaseOrderPage() {
     gst,
     total,
 
-    status: "Draft",
+    status: form.status,
+
+    supplierType,
   };
 
   /* =====================================================
@@ -515,18 +607,13 @@ export default function NewPurchaseOrderPage() {
                       key={project.id}
                       value={project.id}
                     >
-                      {project.name}
+                      {project.name ||
+                        project.projectName ||
+                        "Unnamed project"}
                     </option>
                   ))}
                 </select>
               )}
-
-{/*           {selectedProject && (
-                <p className="mt-2 text-xs text-gray-500">
-                  Project ID: {selectedProject.id}
-                </p>
-            )}
-*/} 
             </div>
 
             {/* Status */}
@@ -539,10 +626,10 @@ export default function NewPurchaseOrderPage() {
               <select
                 value={form.status}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
+                  setForm((prev) => ({
+                    ...prev,
                     status: e.target.value,
-                  })
+                  }))
                 }
                 className="w-full rounded-lg border px-4 py-3"
               >
@@ -629,55 +716,109 @@ export default function NewPurchaseOrderPage() {
         </section>
 
         {/* =================================================
-            Supplier
+            Supplier / Subcontractor
         ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+
           <h2 className="mb-5 text-xl font-semibold">
-            Supplier
+            Supplier / Subcontractor
           </h2>
 
-          {loadingSuppliers ? (
-            <p className="text-gray-500">
-              Loading suppliers...
-            </p>
-          ) : suppliers.length === 0 ? (
-            <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800">
-              No suppliers found. Please create a supplier first.
-            </div>
-          ) : (
+          {/* ---------------------------------------------
+              Step 1 - Select Type
+          --------------------------------------------- */}
+
+          <div className="mb-5">
+            <label className="mb-2 block text-sm font-medium">
+              Type
+            </label>
+
+            <select
+              value={supplierType}
+              onChange={handleSupplierTypeChange}
+              className="w-full rounded-lg border px-4 py-3"
+            >
+              <option value="">
+                Select Supplier or Subcontractor
+              </option>
+
+              <option value="Supplier">
+                Supplier
+              </option>
+
+              <option value="Subcontractor">
+                Subcontractor
+              </option>
+            </select>
+          </div>
+
+          {/* ---------------------------------------------
+              Step 2 - Load Selected Collection
+          --------------------------------------------- */}
+
+          {supplierType && (
             <div>
               <label className="mb-2 block text-sm font-medium">
-                Select Supplier
+                Select {supplierType}
               </label>
 
-              <select
-                value={selectedSupplierId}
-                onChange={(e) =>
-                  setSelectedSupplierId(e.target.value)
-                }
-                className="w-full rounded-lg border px-4 py-3"
-              >
-                {suppliers.map((supplier) => (
-                  <option
-                    key={supplier.id}
-                    value={supplier.id}
-                  >
-                    {supplier.name}
+              {loadingSuppliers ? (
+                <p className="rounded-lg border px-4 py-3 text-sm text-gray-500">
+                  Loading {supplierType.toLowerCase()}s...
+                </p>
+              ) : suppliers.length === 0 ? (
+                <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800">
+                  No {supplierType.toLowerCase()}s found.
+                  Please create one first.
+                </div>
+              ) : (
+                <select
+                  value={selectedSupplierId}
+                  onChange={handleSupplierChange}
+                  className="w-full rounded-lg border px-4 py-3"
+                >
+                  <option value="">
+                    Select {supplierType.toLowerCase()}
                   </option>
-                ))}
-              </select>
+
+                  {suppliers.map((supplier) => (
+                    <option
+                      key={supplier.id}
+                      value={supplier.id}
+                    >
+                      {supplier.name || "Unnamed"}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 
+          {/* ---------------------------------------------
+              Selected Information
+          --------------------------------------------- */}
+
           {selectedSupplier && (
             <div className="mt-5 rounded-lg bg-gray-50 p-5">
+
+              <div className="mb-4">
+                <p className="text-xs text-gray-500">
+                  Type
+                </p>
+
+                <p className="font-medium">
+                  {supplierType}
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
                 <div>
                   <p className="text-xs text-gray-500">
-                    Supplier
+                    Name
                   </p>
+
                   <p className="font-medium">
                     {selectedSupplier.name || "-"}
                   </p>
@@ -687,6 +828,7 @@ export default function NewPurchaseOrderPage() {
                   <p className="text-xs text-gray-500">
                     ABN
                   </p>
+
                   <p>
                     {selectedSupplier.abn || "-"}
                   </p>
@@ -696,6 +838,7 @@ export default function NewPurchaseOrderPage() {
                   <p className="text-xs text-gray-500">
                     Contact
                   </p>
+
                   <p>
                     {selectedSupplier.contact || "-"}
                   </p>
@@ -705,6 +848,7 @@ export default function NewPurchaseOrderPage() {
                   <p className="text-xs text-gray-500">
                     Email
                   </p>
+
                   <p>
                     {selectedSupplier.email || "-"}
                   </p>
@@ -714,6 +858,7 @@ export default function NewPurchaseOrderPage() {
                   <p className="text-xs text-gray-500">
                     Phone
                   </p>
+
                   <p>
                     {selectedSupplier.phone || "-"}
                   </p>
@@ -723,6 +868,7 @@ export default function NewPurchaseOrderPage() {
                   <p className="text-xs text-gray-500">
                     Address
                   </p>
+
                   <p>
                     {selectedSupplier.address || "-"}
                   </p>
@@ -731,6 +877,7 @@ export default function NewPurchaseOrderPage() {
               </div>
             </div>
           )}
+
         </section>
 
         {/* =================================================
@@ -738,6 +885,7 @@ export default function NewPurchaseOrderPage() {
         ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+
           <h2 className="mb-5 text-xl font-semibold">
             Site Address
           </h2>
@@ -750,6 +898,7 @@ export default function NewPurchaseOrderPage() {
             placeholder="Enter project/site address"
             className="w-full rounded-lg border px-4 py-3"
           />
+
         </section>
 
         {/* =================================================
@@ -759,6 +908,7 @@ export default function NewPurchaseOrderPage() {
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
 
           <div className="mb-5 flex items-center justify-between">
+
             <h2 className="text-xl font-semibold">
               Order Items
             </h2>
@@ -770,11 +920,13 @@ export default function NewPurchaseOrderPage() {
             >
               + Add Item
             </button>
+
           </div>
 
           <div className="space-y-4">
 
             {items.map((item, index) => {
+
               const itemTotal =
                 (Number(item.qty) || 0) *
                 (Number(item.unitPrice) || 0);
@@ -842,7 +994,9 @@ export default function NewPurchaseOrderPage() {
 
                   <button
                     type="button"
-                    onClick={() => removeItem(index)}
+                    onClick={() =>
+                      removeItem(index)
+                    }
                     className="col-span-1 text-red-500 hover:text-red-700"
                   >
                     ×
@@ -858,20 +1012,27 @@ export default function NewPurchaseOrderPage() {
 
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>
+                ${subtotal.toFixed(2)}
+              </span>
             </div>
 
             <div className="flex justify-between">
               <span>GST (10%)</span>
-              <span>${gst.toFixed(2)}</span>
+              <span>
+                ${gst.toFixed(2)}
+              </span>
             </div>
 
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>
+                ${total.toFixed(2)}
+              </span>
             </div>
 
           </div>
+
         </section>
 
         {/* =================================================
@@ -896,7 +1057,8 @@ export default function NewPurchaseOrderPage() {
             name="scopeOfWork"
             value={form.scopeOfWork}
             onChange={(e) => {
-              const lines = e.target.value.split("\n");
+              const lines =
+                e.target.value.split("\n");
 
               if (lines.length <= 20) {
                 setForm((prev) => ({
@@ -981,25 +1143,8 @@ export default function NewPurchaseOrderPage() {
             </div>
 
           </div>
+
         </section>
-
-        {/* =================================================
-            Trading Terms
-        ================================================= */}
-
-        {/*
-        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-xl font-semibold">
-            Trading Terms
-          </h2>
-
-          <p className="text-sm leading-6 text-gray-600">
-            Payment terms are due 15 days from invoice.
-            Invoices are to be issued on the 15th or 30th
-            of each month.
-          </p>
-        </section>
-        */}
 
         {/* =================================================
             Actions
@@ -1019,12 +1164,14 @@ export default function NewPurchaseOrderPage() {
             onClick={handleGeneratePO}
             disabled={
               saving ||
-              loadingSuppliers ||
-              loadingProjects
+              loadingProjects ||
+              loadingSuppliers
             }
             className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Generate PO"}
+            {saving
+              ? "Saving..."
+              : "Generate PO"}
           </button>
 
         </div>
@@ -1048,7 +1195,10 @@ export default function NewPurchaseOrderPage() {
                     data={poDataForPDF}
                   />
                 }
-                fileName={`${form.poNumber || "purchase-order"}.pdf`}
+                fileName={`${
+                  form.poNumber ||
+                  "purchase-order"
+                }.pdf`}
                 className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
               >
                 {({ loading }) =>
@@ -1081,3 +1231,4 @@ export default function NewPurchaseOrderPage() {
     </div>
   );
 }
+

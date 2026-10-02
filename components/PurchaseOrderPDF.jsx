@@ -1,3 +1,4 @@
+
 import {
   Document,
   Page,
@@ -218,121 +219,241 @@ function formatDate(value) {
 }
 
 export default function PurchaseOrderPDF({ data }) {
-  const subtotal = data.items.reduce(
+  /* =====================================================
+     Supplier / Subcontractor Type
+  ===================================================== */
+
+  const isSubcontractor =
+    data.supplierType === "Subcontractor";
+
+  const partyLabel = isSubcontractor
+    ? "SUBCONTRACTOR"
+    : "SUPPLIER";
+
+  const partyFieldLabel = isSubcontractor
+    ? "Subcontractor:"
+    : "Supplier:";
+
+  /* =====================================================
+     Totals
+  ===================================================== */
+
+  const subtotal = (data.items || []).reduce(
     (sum, item) =>
       sum +
-      Number(item.qty || 0) * Number(item.unitPrice || 0),
+      Number(item.qty || 0) *
+        Number(item.unitPrice || 0),
     0
   );
 
   const gst = subtotal * 0.1;
   const total = subtotal + gst;
 
+  /* =====================================================
+     Scope of Work
+  ===================================================== */
+
   const scopeLines = (data.scopeOfWork || "")
     .split("\n")
     .slice(0, 20);
 
+  /* =====================================================
+     Render
+  ===================================================== */
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* HEADER */}
+
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
         <View style={styles.header}>
+
           <View style={styles.companyLeft}>
+
             <Text style={styles.companyName}>
               YJ Building Evolution Pty Ltd
             </Text>
 
-            <Text>ABN: 91 644 460 917 </Text>
-            <Text>ACN: 644 460 917</Text>
+            <Text>
+              ABN: 91 644 460 917
+            </Text>
+
+            <Text>
+              ACN: 644 460 917
+            </Text>
 
             <Image
               src="/logo.png"
               style={styles.logo}
             />
+
           </View>
 
           <View style={styles.companyRight}>
-            <Text>29 Brandl St, Eight Mile Plains QLD 4113</Text>
-            <Text>account@yjliningscreation.com.au</Text>
+
+            <Text>
+              29 Brandl St, Eight Mile Plains QLD 4113
+            </Text>
+
+            <Text>
+              account@yjliningscreation.com.au
+            </Text>
+
           </View>
+
         </View>
 
         <View style={styles.divider} />
 
-        {/* TITLE */}
+        {/* =================================================
+            TITLE
+        ================================================= */}
+
         <Text style={styles.title}>
           Purchase Order
         </Text>
 
-        {/* SUPPLIER + PO INFO */}
+        {/* =================================================
+            SUPPLIER / SUBCONTRACTOR + PO INFO
+        ================================================= */}
+
         <View style={styles.topInfo}>
+
           <View style={styles.supplierSection}>
+
+            {/* Dynamic section title */}
+
             <Text style={styles.sectionTitle}>
-              SUBCONTRACTOR
+              {partyLabel}
             </Text>
 
+            {/* Name */}
+
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Subcontractor:</Text>
+
+              <Text style={styles.label}>
+                {partyFieldLabel}
+              </Text>
+
               <Text style={styles.value}>
                 {data.supplier?.name || ""}
               </Text>
+
             </View>
 
+            {/* ABN */}
+
             <View style={styles.infoRow}>
-              <Text style={styles.label}>ABN:</Text>
+
+              <Text style={styles.label}>
+                ABN:
+              </Text>
+
               <Text style={styles.value}>
                 {data.supplier?.abn || ""}
               </Text>
+
             </View>
 
+            {/* Attention */}
+
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Attention:</Text>
+
+              <Text style={styles.label}>
+                Attention:
+              </Text>
+
               <Text style={styles.value}>
                 {data.supplier?.contact || ""}
               </Text>
+
             </View>
 
+            {/* Email */}
+
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Email:</Text>
+
+              <Text style={styles.label}>
+                Email:
+              </Text>
+
               <Text style={styles.value}>
                 {data.supplier?.email || ""}
               </Text>
+
             </View>
 
+            {/* Phone */}
+
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Phone:</Text>
+
+              <Text style={styles.label}>
+                Phone:
+              </Text>
+
               <Text style={styles.value}>
                 {data.supplier?.phone || ""}
               </Text>
+
             </View>
+
           </View>
 
+          {/* =================================================
+              PO INFORMATION
+          ================================================= */}
+
           <View style={styles.poSection}>
+
             <View style={styles.infoRow}>
-              <Text style={styles.label}>No:</Text>
+
+              <Text style={styles.label}>
+                No:
+              </Text>
+
               <Text style={styles.value}>
                 {data.poNumber}
               </Text>
+
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Date:</Text>
+
+              <Text style={styles.label}>
+                Date:
+              </Text>
+
               <Text style={styles.value}>
                 {formatDate(data.poDate)}
               </Text>
+
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Delivery:</Text>
+
+              <Text style={styles.label}>
+                Delivery:
+              </Text>
+
               <Text style={styles.value}>
                 {formatDate(data.deliveryDate)}
               </Text>
+
             </View>
+
           </View>
+
         </View>
 
-        {/* SITE ADDRESS */}
+        {/* =================================================
+            SITE ADDRESS
+        ================================================= */}
+
         <View style={styles.siteAddress}>
+
           <Text style={styles.sectionTitle}>
             SITE ADDRESS
           </Text>
@@ -340,15 +461,23 @@ export default function PurchaseOrderPDF({ data }) {
           <Text>
             {data.siteAddress || ""}
           </Text>
+
         </View>
 
-        {/* ITEMS */}
+        {/* =================================================
+            ORDER DETAILS
+        ================================================= */}
+
         <Text style={styles.sectionTitle}>
           ORDER DETAILS
         </Text>
 
         <View style={styles.table}>
+
+          {/* Table Header */}
+
           <View style={styles.tableHeader}>
+
             <Text style={styles.description}>
               Description
             </Text>
@@ -364,44 +493,59 @@ export default function PurchaseOrderPDF({ data }) {
             <Text style={styles.itemTotal}>
               Total
             </Text>
+
           </View>
 
-          {data.items.map((item, index) => {
-            const itemTotal =
-              Number(item.qty || 0) *
-              Number(item.unitPrice || 0);
+          {/* Table Rows */}
 
-            return (
-              <View
-                style={styles.tableRow}
-                key={index}
-              >
-                <Text style={styles.description}>
-                  {item.description || ""}
-                </Text>
+          {(data.items || []).map(
+            (item, index) => {
 
-                <Text style={styles.qty}>
-                  {item.qty || 0}
-                </Text>
+              const itemTotal =
+                Number(item.qty || 0) *
+                Number(item.unitPrice || 0);
 
-                <Text style={styles.unitPrice}>
-                  {formatMoney(item.unitPrice)}
-                </Text>
+              return (
+                <View
+                  style={styles.tableRow}
+                  key={index}
+                >
 
-                <Text style={styles.itemTotal}>
-                  {formatMoney(itemTotal)}
-                </Text>
-              </View>
-            );
-          })}
+                  <Text style={styles.description}>
+                    {item.description || ""}
+                  </Text>
+
+                  <Text style={styles.qty}>
+                    {item.qty || 0}
+                  </Text>
+
+                  <Text style={styles.unitPrice}>
+                    {formatMoney(
+                      item.unitPrice
+                    )}
+                  </Text>
+
+                  <Text style={styles.itemTotal}>
+                    {formatMoney(itemTotal)}
+                  </Text>
+
+                </View>
+              );
+            }
+          )}
+
         </View>
 
-        {/* SCOPE */}
+        {/* =================================================
+            SCOPE OF WORK
+        ================================================= */}
+
         <Text style={styles.sectionTitle}>
           SCOPE OF WORK
         </Text>
 
         <View style={styles.scopeBox}>
+
           {scopeLines.length > 0 ? (
             scopeLines.map((line, index) => (
               <Text
@@ -414,18 +558,37 @@ export default function PurchaseOrderPDF({ data }) {
           ) : (
             <Text> </Text>
           )}
+
         </View>
 
-        {/* TOTALS */}
+        {/* =================================================
+            TOTALS
+        ================================================= */}
+
         <View style={styles.totals}>
+
           <View style={styles.totalRow}>
-            <Text>Subtotal</Text>
-            <Text>{formatMoney(subtotal)}</Text>
+
+            <Text>
+              Subtotal
+            </Text>
+
+            <Text>
+              {formatMoney(subtotal)}
+            </Text>
+
           </View>
 
           <View style={styles.totalRow}>
-            <Text>GST 10%</Text>
-            <Text>{formatMoney(gst)}</Text>
+
+            <Text>
+              GST 10%
+            </Text>
+
+            <Text>
+              {formatMoney(gst)}
+            </Text>
+
           </View>
 
           <View
@@ -434,68 +597,99 @@ export default function PurchaseOrderPDF({ data }) {
               styles.grandTotal,
             ]}
           >
-            <Text>Total</Text>
-            <Text>{formatMoney(total)}</Text>
+
+            <Text>
+              Total
+            </Text>
+
+            <Text>
+              {formatMoney(total)}
+            </Text>
+
           </View>
+
         </View>
 
-        {/* INVOICE NOTE */}
+        {/* =================================================
+            INVOICE NOTE
+        ================================================= */}
+
         <View style={styles.invoiceNote}>
+
           <Text>
-            Invoice must be supplied in the name of
-            {" "}
+            Invoice must be supplied in the name of{" "}
+
             <Text style={styles.bold}>
               YJ Building Evolution Pty Ltd
             </Text>
+
             , and please quote{" "}
+
             <Text style={styles.bold}>
               {data.poNumber}
             </Text>
+
             {" "}each claim.
           </Text>
+
         </View>
 
-        {/* SITE CONTACT */}
+        {/* =================================================
+            YJ SITE CONTACT
+        ================================================= */}
+
         <View style={styles.contactSection}>
+
           <Text style={styles.sectionTitle}>
             YJ SITE CONTACT
           </Text>
 
           <View style={styles.infoRow}>
+
             <Text style={styles.label}>
               Project Manager:
             </Text>
 
             <Text style={styles.value}>
               {data.projectManager || ""}
+
               {data.projectManagerEmail
                 ? ` — ${data.projectManagerEmail}`
                 : ""}
             </Text>
+
           </View>
 
           <View style={styles.infoRow}>
+
             <Text style={styles.label}>
               Site Manager:
             </Text>
 
             <Text style={styles.value}>
               {data.siteManager || ""}
+
               {data.siteManagerEmail
                 ? ` — ${data.siteManagerEmail}`
                 : ""}
             </Text>
+
           </View>
+
         </View>
 
         <View style={styles.divider} />
 
-        {/* TERMS */}
+        {/* =================================================
+            TRADING TERMS
+        ================================================= */}
+
         <Text style={styles.sectionTitle}>
           TRADING TERMS
         </Text>
 
         <View style={styles.terms}>
+
           <Text style={styles.term}>
             1. On completion of job, payment is due
             15 days from receipt of invoice on the
@@ -513,7 +707,9 @@ export default function PurchaseOrderPDF({ data }) {
             {" "}
             account@yjliningscreation.com.au
           </Text>
+
         </View>
+
       </Page>
     </Document>
   );

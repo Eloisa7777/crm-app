@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
 const PO_ALLOWED_PATHS = [
   "/purchase-orders",
   "/suppliers",
+  "/subcontractors",
 ];
 
 const EST_ALLOWED_PATHS = [

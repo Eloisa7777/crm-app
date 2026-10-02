@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -27,14 +28,25 @@ export default function PurchaseOrderDetailPage() {
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
 
+  /* =====================================================
+     Supplier / Subcontractor
+  ===================================================== */
+
+  const [parties, setParties] = useState([]);
+  const [loadingParties, setLoadingParties] = useState(false);
+
   const [form, setForm] = useState({
     poNumber: "",
+
     projectId: "",
     projectName: "",
+
     status: "Draft",
 
     poDate: "",
     deliveryDate: "",
+
+    supplierType: "Supplier",
 
     supplier: {
       id: "",
@@ -70,6 +82,15 @@ export default function PurchaseOrderDetailPage() {
   const [error, setError] = useState("");
 
   /* =====================================================
+     Collection Mapping
+  ===================================================== */
+
+  const PARTY_COLLECTIONS = {
+    Supplier: "Suppliers",
+    Subcontractor: "Subcontractors",
+  };
+
+  /* =====================================================
      Load PO
   ===================================================== */
 
@@ -101,6 +122,10 @@ export default function PurchaseOrderDetailPage() {
 
         setPurchaseOrder(data);
 
+        /* -----------------------------------------------
+           Supplier / Subcontractor
+        ------------------------------------------------ */
+
         const supplier =
           typeof data.supplier === "object" &&
           data.supplier !== null
@@ -109,35 +134,78 @@ export default function PurchaseOrderDetailPage() {
                 name: data.supplier || "",
               };
 
+        /*
+         * Old PO data may not have supplierType.
+         * Default to Supplier for backward compatibility.
+         */
+        const supplierType =
+          data.supplierType === "Subcontractor"
+            ? "Subcontractor"
+            : "Supplier";
+
+        /* -----------------------------------------------
+           Items
+        ------------------------------------------------ */
+
         const items = Array.isArray(data.items)
           ? data.items.map((item) => ({
-              description: item.description || "",
-              qty: Number(item.qty) || 0,
-              unitPrice: Number(item.unitPrice) || 0,
+              description:
+                item.description || "",
+
+              qty:
+                Number(item.qty) || 0,
+
+              unitPrice:
+                Number(item.unitPrice) || 0,
             }))
           : [];
 
+        /* -----------------------------------------------
+           Form
+        ------------------------------------------------ */
+
         setForm({
-          poNumber: data.poNumber || "",
+          poNumber:
+            data.poNumber || "",
 
-          projectId: data.projectId || "",
+          projectId:
+            data.projectId || "",
 
-          projectName: data.projectName || "",
+          projectName:
+            data.projectName || "",
 
-          status: data.status || "Draft",
+          status:
+            data.status || "Draft",
 
-          poDate: data.poDate || "",
+          poDate:
+            data.poDate || "",
 
-          deliveryDate: data.deliveryDate || "",
+          deliveryDate:
+            data.deliveryDate || "",
+
+          supplierType,
 
           supplier: {
-            id: supplier.id || "",
-            name: supplier.name || "",
-            abn: supplier.abn || "",
-            contact: supplier.contact || "",
-            email: supplier.email || "",
-            phone: supplier.phone || "",
-            address: supplier.address || "",
+            id:
+              supplier.id || "",
+
+            name:
+              supplier.name || "",
+
+            abn:
+              supplier.abn || "",
+
+            contact:
+              supplier.contact || "",
+
+            email:
+              supplier.email || "",
+
+            phone:
+              supplier.phone || "",
+
+            address:
+              supplier.address || "",
           },
 
           supplierId:
@@ -145,18 +213,22 @@ export default function PurchaseOrderDetailPage() {
             supplier.id ||
             "",
 
-          siteAddress: data.siteAddress || "",
+          siteAddress:
+            data.siteAddress || "",
 
           items,
 
-          scopeOfWork: data.scopeOfWork || "",
+          scopeOfWork:
+            data.scopeOfWork || "",
 
-          projectManager: data.projectManager || "",
+          projectManager:
+            data.projectManager || "",
 
           projectManagerEmail:
             data.projectManagerEmail || "",
 
-          siteManager: data.siteManager || "",
+          siteManager:
+            data.siteManager || "",
 
           siteManagerEmail:
             data.siteManagerEmail || "",
@@ -190,14 +262,17 @@ export default function PurchaseOrderDetailPage() {
           collection(db, "projects")
         );
 
-        const data = snapshot.docs.map((projectDoc) => {
-          const projectData = projectDoc.data();
+        const data = snapshot.docs.map(
+          (projectDoc) => {
+            const projectData =
+              projectDoc.data();
 
-          return {
-            id: projectDoc.id,
-            ...projectData,
-          };
-        });
+            return {
+              id: projectDoc.id,
+              ...projectData,
+            };
+          }
+        );
 
         console.log("PROJECTS:", data);
 
@@ -221,6 +296,74 @@ export default function PurchaseOrderDetailPage() {
   }, []);
 
   /* =====================================================
+     Load Supplier / Subcontractor
+  ===================================================== */
+
+  async function loadParties(type) {
+    const collectionName =
+      PARTY_COLLECTIONS[type];
+
+    if (!collectionName) {
+      setParties([]);
+      return;
+    }
+
+    try {
+      setLoadingParties(true);
+      setError("");
+
+      const snapshot = await getDocs(
+        collection(db, collectionName)
+      );
+
+      const data = snapshot.docs.map(
+        (partyDoc) => {
+          const partyData =
+            partyDoc.data();
+
+          return {
+            id: partyDoc.id,
+            ...partyData,
+          };
+        }
+      );
+
+      console.log(
+        `${type.toUpperCase()}S:`,
+        data
+      );
+
+      setParties(data);
+
+    } catch (err) {
+      console.error(
+        `Error loading ${type}:`,
+        err
+      );
+
+      setParties([]);
+
+      setError(
+        `Failed to load ${type.toLowerCase()}s.`
+      );
+    } finally {
+      setLoadingParties(false);
+    }
+  }
+
+  /* =====================================================
+     Load Party When Editing Starts
+  ===================================================== */
+
+  useEffect(() => {
+    if (!editing) return;
+
+    if (!form.supplierType) return;
+
+    loadParties(form.supplierType);
+  }, [editing]);
+
+  /* =====================================================
      Generic Form Update
   ===================================================== */
 
@@ -233,21 +376,17 @@ export default function PurchaseOrderDetailPage() {
 
   /* =====================================================
      Project Update
-     
-     IMPORTANT:
-     Select value is projectId.
-     Once selected:
-       projectId   -> selected project ID
-       projectName -> selected project name
   ===================================================== */
 
   function handleProjectChange(e) {
-    const projectId = e.target.value;
+    const projectId =
+      e.target.value;
 
-    const selectedProject = projects.find(
-      (project) =>
-        project.id === projectId
-    );
+    const selectedProject =
+      projects.find(
+        (project) =>
+          project.id === projectId
+      );
 
     console.log(
       "Selected project:",
@@ -268,14 +407,132 @@ export default function PurchaseOrderDetailPage() {
   }
 
   /* =====================================================
-     Supplier Update
+     Supplier / Subcontractor Type Change
   ===================================================== */
 
-  function updateSupplier(field, value) {
+  async function handleSupplierTypeChange(
+    e
+  ) {
+    const supplierType =
+      e.target.value;
+
     setForm((prev) => ({
       ...prev,
+
+      supplierType,
+
+      supplierId: "",
+
+      supplier: {
+        id: "",
+        name: "",
+        abn: "",
+        contact: "",
+        email: "",
+        phone: "",
+        address: "",
+      },
+    }));
+
+    setParties([]);
+
+    if (supplierType) {
+      await loadParties(
+        supplierType
+      );
+    }
+  }
+
+  /* =====================================================
+     Supplier / Subcontractor Selection
+  ===================================================== */
+
+  function handlePartyChange(e) {
+    const supplierId =
+      e.target.value;
+
+    const selectedParty =
+      parties.find(
+        (party) =>
+          party.id === supplierId
+      );
+
+    console.log(
+      "Selected party:",
+      selectedParty
+    );
+
+    if (!selectedParty) {
+      setForm((prev) => ({
+        ...prev,
+
+        supplierId: "",
+
+        supplier: {
+          id: "",
+          name: "",
+          abn: "",
+          contact: "",
+          email: "",
+          phone: "",
+          address: "",
+        },
+      }));
+
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+
+      supplierId:
+        selectedParty.id,
+
+      supplier: {
+        id:
+          selectedParty.id || "",
+
+        name:
+          selectedParty.name ||
+          selectedParty.companyName ||
+          "",
+
+        abn:
+          selectedParty.abn || "",
+
+        contact:
+          selectedParty.contact ||
+          selectedParty.contactName ||
+          "",
+
+        email:
+          selectedParty.email || "",
+
+        phone:
+          selectedParty.phone ||
+          selectedParty.mobile ||
+          "",
+
+        address:
+          selectedParty.address || "",
+      },
+    }));
+  }
+
+  /* =====================================================
+     Supplier / Subcontractor Manual Update
+  ===================================================== */
+
+  function updateSupplier(
+    field,
+    value
+  ) {
+    setForm((prev) => ({
+      ...prev,
+
       supplier: {
         ...prev.supplier,
+
         [field]: value,
       },
     }));
@@ -285,9 +542,15 @@ export default function PurchaseOrderDetailPage() {
      Item Update
   ===================================================== */
 
-  function updateItem(index, field, value) {
+  function updateItem(
+    index,
+    field,
+    value
+  ) {
     setForm((prev) => {
-      const items = [...prev.items];
+      const items = [
+        ...prev.items,
+      ];
 
       items[index] = {
         ...items[index],
@@ -339,22 +602,28 @@ export default function PurchaseOrderDetailPage() {
      Totals
   ===================================================== */
 
-  const subtotal = form.items.reduce(
-    (sum, item) => {
-      const qty =
-        Number(item.qty) || 0;
+  const subtotal =
+    form.items.reduce(
+      (sum, item) => {
+        const qty =
+          Number(item.qty) || 0;
 
-      const unitPrice =
-        Number(item.unitPrice) || 0;
+        const unitPrice =
+          Number(item.unitPrice) || 0;
 
-      return sum + qty * unitPrice;
-    },
-    0
-  );
+        return (
+          sum +
+          qty * unitPrice
+        );
+      },
+      0
+    );
 
-  const gst = subtotal * 0.1;
+  const gst =
+    subtotal * 0.1;
 
-  const total = subtotal + gst;
+  const total =
+    subtotal + gst;
 
   /* =====================================================
      Save
@@ -388,7 +657,8 @@ export default function PurchaseOrderDetailPage() {
       const selectedProject =
         projects.find(
           (project) =>
-            project.id === form.projectId
+            project.id ===
+            form.projectId
         );
 
       if (!selectedProject) {
@@ -419,29 +689,60 @@ export default function PurchaseOrderDetailPage() {
       }
 
       /* -----------------------------------------------
+         Validate Supplier / Subcontractor
+      ------------------------------------------------ */
+
+      if (
+        !form.supplierType
+      ) {
+        setError(
+          "Please select Supplier or Subcontractor."
+        );
+
+        setSaving(false);
+        return;
+      }
+
+      if (!form.supplierId) {
+        setError(
+          `Please select a ${form.supplierType.toLowerCase()}.`
+        );
+
+        setSaving(false);
+        return;
+      }
+
+      /* -----------------------------------------------
          Clean Items
       ------------------------------------------------ */
 
       const cleanItems =
-        form.items.map((item) => {
-          const qty =
-            Number(item.qty) || 0;
+        form.items.map(
+          (item) => {
+            const qty =
+              Number(item.qty) ||
+              0;
 
-          const unitPrice =
-            Number(item.unitPrice) || 0;
+            const unitPrice =
+              Number(
+                item.unitPrice
+              ) || 0;
 
-          return {
-            description:
-              item.description || "",
+            return {
+              description:
+                item.description ||
+                "",
 
-            qty,
+              qty,
 
-            unitPrice,
+              unitPrice,
 
-            total:
-              qty * unitPrice,
-          };
-        });
+              total:
+                qty *
+                unitPrice,
+            };
+          }
+        );
 
       /* -----------------------------------------------
          Calculate Totals
@@ -458,7 +759,8 @@ export default function PurchaseOrderDetailPage() {
         cleanSubtotal * 0.1;
 
       const cleanTotal =
-        cleanSubtotal + cleanGst;
+        cleanSubtotal +
+        cleanGst;
 
       /* -----------------------------------------------
          Data to Firestore
@@ -468,19 +770,15 @@ export default function PurchaseOrderDetailPage() {
         poNumber:
           form.poNumber.trim(),
 
-        /*
-         * IMPORTANT:
-         * Always save the actual Firestore
-         * project document ID.
-         */
+        /* Project */
+
         projectId:
           selectedProject.id,
 
-        /*
-         * Save the project name as a snapshot.
-         */
         projectName:
           selectedProjectName,
+
+        /* PO */
 
         status:
           form.status,
@@ -491,42 +789,69 @@ export default function PurchaseOrderDetailPage() {
         deliveryDate:
           form.deliveryDate,
 
+        /* ---------------------------------------------
+           Supplier / Subcontractor
+        --------------------------------------------- */
+
+        supplierType:
+          form.supplierType,
+
         supplierId:
           form.supplierId ||
           form.supplier.id ||
           "",
 
+        /*
+         * Keep existing "supplier" field
+         * for compatibility with current
+         * PurchaseOrderPDF and existing POs.
+         */
         supplier: {
           id:
-            form.supplier.id || "",
+            form.supplier.id ||
+            "",
 
           name:
-            form.supplier.name || "",
+            form.supplier.name ||
+            "",
 
           abn:
-            form.supplier.abn || "",
+            form.supplier.abn ||
+            "",
 
           contact:
-            form.supplier.contact || "",
+            form.supplier.contact ||
+            "",
 
           email:
-            form.supplier.email || "",
+            form.supplier.email ||
+            "",
 
           phone:
-            form.supplier.phone || "",
+            form.supplier.phone ||
+            "",
 
           address:
-            form.supplier.address || "",
+            form.supplier.address ||
+            "",
         },
+
+        /* Site */
 
         siteAddress:
           form.siteAddress,
 
+        /* Items */
+
         items:
           cleanItems,
 
+        /* Scope */
+
         scopeOfWork:
           form.scopeOfWork,
+
+        /* YJ Contact */
 
         projectManager:
           form.projectManager,
@@ -539,6 +864,8 @@ export default function PurchaseOrderDetailPage() {
 
         siteManagerEmail:
           form.siteManagerEmail,
+
+        /* Totals */
 
         subtotal:
           cleanSubtotal,
@@ -567,25 +894,27 @@ export default function PurchaseOrderDetailPage() {
          Update Local PO
       ------------------------------------------------ */
 
-      setPurchaseOrder((prev) => ({
-        ...prev,
-        ...updatedData,
+      setPurchaseOrder(
+        (prev) => ({
+          ...prev,
+          ...updatedData,
 
-        items:
-          cleanItems,
+          items:
+            cleanItems,
 
-        supplier:
-          updatedData.supplier,
+          supplier:
+            updatedData.supplier,
 
-        subtotal:
-          cleanSubtotal,
+          subtotal:
+            cleanSubtotal,
 
-        gst:
-          cleanGst,
+          gst:
+            cleanGst,
 
-        total:
-          cleanTotal,
-      }));
+          total:
+            cleanTotal,
+        })
+      );
 
       /* -----------------------------------------------
          Update Form
@@ -628,31 +957,47 @@ export default function PurchaseOrderDetailPage() {
   ===================================================== */
 
   function handleCancel() {
-    if (!purchaseOrder) return;
+    if (!purchaseOrder)
+      return;
 
-    const data = purchaseOrder;
+    const data =
+      purchaseOrder;
 
     const supplier =
-      typeof data.supplier === "object" &&
+      typeof data.supplier ===
+        "object" &&
       data.supplier !== null
         ? data.supplier
         : {
-            name: data.supplier || "",
+            name:
+              data.supplier || "",
           };
 
     const items =
       Array.isArray(data.items)
-        ? data.items.map((item) => ({
-            description:
-              item.description || "",
+        ? data.items.map(
+            (item) => ({
+              description:
+                item.description ||
+                "",
 
-            qty:
-              Number(item.qty) || 0,
+              qty:
+                Number(item.qty) ||
+                0,
 
-            unitPrice:
-              Number(item.unitPrice) || 0,
-          }))
+              unitPrice:
+                Number(
+                  item.unitPrice
+                ) || 0,
+            })
+          )
         : [];
+
+    const supplierType =
+      data.supplierType ===
+      "Subcontractor"
+        ? "Subcontractor"
+        : "Supplier";
 
     setForm({
       poNumber:
@@ -672,6 +1017,8 @@ export default function PurchaseOrderDetailPage() {
 
       deliveryDate:
         data.deliveryDate || "",
+
+      supplierType,
 
       supplier: {
         id:
@@ -713,15 +1060,18 @@ export default function PurchaseOrderDetailPage() {
         data.projectManager || "",
 
       projectManagerEmail:
-        data.projectManagerEmail || "",
+        data.projectManagerEmail ||
+        "",
 
       siteManager:
         data.siteManager || "",
 
       siteManagerEmail:
-        data.siteManagerEmail || "",
+        data.siteManagerEmail ||
+        "",
     });
 
+    setParties([]);
     setEditing(false);
     setError("");
   }
@@ -734,9 +1084,11 @@ export default function PurchaseOrderDetailPage() {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="mx-auto max-w-6xl">
+
           <p className="text-gray-500">
             Loading purchase order...
           </p>
+
         </div>
       </div>
     );
@@ -746,9 +1098,13 @@ export default function PurchaseOrderDetailPage() {
      Error
   ===================================================== */
 
-  if (error && !purchaseOrder) {
+  if (
+    error &&
+    !purchaseOrder
+  ) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
+
         <div className="mx-auto max-w-6xl">
 
           <Link
@@ -775,6 +1131,7 @@ export default function PurchaseOrderDetailPage() {
           </div>
 
         </div>
+
       </div>
     );
   }
@@ -790,25 +1147,28 @@ export default function PurchaseOrderDetailPage() {
     form.supplier || {};
 
   const pdfItems =
-    form.items.map((item) => {
-      const qty =
-        Number(item.qty) || 0;
+    form.items.map(
+      (item) => {
+        const qty =
+          Number(item.qty) || 0;
 
-      const unitPrice =
-        Number(item.unitPrice) || 0;
+        const unitPrice =
+          Number(item.unitPrice) ||
+          0;
 
-      return {
-        description:
-          item.description || "",
+        return {
+          description:
+            item.description || "",
 
-        qty,
+          qty,
 
-        unitPrice,
+          unitPrice,
 
-        total:
-          qty * unitPrice,
-      };
-    });
+          total:
+            qty * unitPrice,
+        };
+      }
+    );
 
   const poDataForPDF = {
     poNumber:
@@ -838,6 +1198,13 @@ export default function PurchaseOrderDetailPage() {
     siteManagerEmail:
       form.siteManagerEmail,
 
+    /* -----------------------------------------------
+       Supplier / Subcontractor
+    ----------------------------------------------- */
+
+    supplierType:
+      form.supplierType,
+
     supplier:
       pdfSupplier,
 
@@ -850,6 +1217,12 @@ export default function PurchaseOrderDetailPage() {
 
     total,
   };
+
+  const partyLabel =
+    form.supplierType ===
+    "Subcontractor"
+      ? "Subcontractor"
+      : "Supplier";
 
   /* =====================================================
      Render
@@ -900,7 +1273,9 @@ export default function PurchaseOrderDetailPage() {
               <>
                 <button
                   type="button"
-                  onClick={handleCancel}
+                  onClick={
+                    handleCancel
+                  }
                   disabled={saving}
                   className="cursor-pointer rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
@@ -909,10 +1284,13 @@ export default function PurchaseOrderDetailPage() {
 
                 <button
                   type="button"
-                  onClick={handleSave}
+                  onClick={
+                    handleSave
+                  }
                   disabled={
                     saving ||
-                    loadingProjects
+                    loadingProjects ||
+                    loadingParties
                   }
                   className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-3 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:opacity-50"
                 >
@@ -980,40 +1358,46 @@ export default function PurchaseOrderDetailPage() {
                   <div className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-gray-500">
                     Loading projects...
                   </div>
-                ) : projects.length === 0 ? (
+                ) : projects.length ===
+                  0 ? (
                   <div className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
                     No projects found.
                   </div>
                 ) : (
                   <select
-                    /*
-                     * IMPORTANT:
-                     * The select now uses projectId,
-                     * NOT projectName.
-                     */
-                    value={form.projectId}
-                    onChange={handleProjectChange}
+                    value={
+                      form.projectId
+                    }
+                    onChange={
+                      handleProjectChange
+                    }
                     className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3"
                   >
                     <option value="">
                       Select project
                     </option>
 
-                    {projects.map((project) => {
-                      const projectName =
-                        project.projectName ||
-                        project.name ||
-                        "";
+                    {projects.map(
+                      (project) => {
+                        const projectName =
+                          project.projectName ||
+                          project.name ||
+                          "";
 
-                      return (
-                        <option
-                          key={project.id}
-                          value={project.id}
-                        >
-                          {projectName}
-                        </option>
-                      );
-                    })}
+                        return (
+                          <option
+                            key={
+                              project.id
+                            }
+                            value={
+                              project.id
+                            }
+                          >
+                            {projectName}
+                          </option>
+                        );
+                      }
+                    )}
                   </select>
                 )
               ) : (
@@ -1035,7 +1419,9 @@ export default function PurchaseOrderDetailPage() {
 
               {editing ? (
                 <select
-                  value={form.status}
+                  value={
+                    form.status
+                  }
                   onChange={(e) =>
                     updateForm(
                       "status",
@@ -1066,7 +1452,8 @@ export default function PurchaseOrderDetailPage() {
                 </select>
               ) : (
                 <p className="rounded-lg bg-gray-50 px-4 py-3">
-                  {form.status || "-"}
+                  {form.status ||
+                    "-"}
                 </p>
               )}
 
@@ -1090,7 +1477,9 @@ export default function PurchaseOrderDetailPage() {
 
             <Field
               label="PO Number"
-              value={form.poNumber}
+              value={
+                form.poNumber
+              }
               editing={editing}
               onChange={(value) =>
                 updateForm(
@@ -1103,7 +1492,9 @@ export default function PurchaseOrderDetailPage() {
             <Field
               label="PO Date"
               type="date"
-              value={form.poDate}
+              value={
+                form.poDate
+              }
               editing={editing}
               onChange={(value) =>
                 updateForm(
@@ -1116,7 +1507,9 @@ export default function PurchaseOrderDetailPage() {
             <Field
               label="Delivery Date"
               type="date"
-              value={form.deliveryDate}
+              value={
+                form.deliveryDate
+              }
               editing={editing}
               onChange={(value) =>
                 updateForm(
@@ -1131,7 +1524,7 @@ export default function PurchaseOrderDetailPage() {
         </section>
 
         {/* =================================================
-            Supplier
+            Supplier / Subcontractor
         ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-sm">
@@ -1141,32 +1534,144 @@ export default function PurchaseOrderDetailPage() {
             <div>
 
               <h2 className="text-xl font-semibold">
-                Supplier
+                {partyLabel}
               </h2>
 
               <p className="mt-1 text-sm text-gray-500">
-                Supplier information
+                {partyLabel} information
               </p>
 
             </div>
 
-            {form.supplierId && (
-              <Link
-                href={`/suppliers/${form.supplierId}`}
-                className="text-sm font-medium text-blue-600 hover:underline"
-              >
-                View Supplier →
-              </Link>
-            )}
+            {!editing &&
+              form.supplierId && (
+                <Link
+                  href={
+                    form.supplierType ===
+                    "Subcontractor"
+                      ? `/subcontractors/${form.supplierId}`
+                      : `/suppliers/${form.supplierId}`
+                  }
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                >
+                  View{" "}
+                  {partyLabel} →
+                </Link>
+              )}
 
           </div>
+
+          {/* ---------------------------------------------
+              Type
+          --------------------------------------------- */}
+
+          {editing && (
+            <div className="mb-5">
+
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Type
+              </label>
+
+              <select
+                value={
+                  form.supplierType
+                }
+                onChange={
+                  handleSupplierTypeChange
+                }
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3"
+              >
+                <option value="">
+                  Select type
+                </option>
+
+                <option value="Supplier">
+                  Supplier
+                </option>
+
+                <option value="Subcontractor">
+                  Subcontractor
+                </option>
+              </select>
+
+            </div>
+          )}
+
+          {/* ---------------------------------------------
+              Party Selection
+          --------------------------------------------- */}
+
+          {editing && (
+            <div className="mb-5">
+
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                {partyLabel}
+              </label>
+
+              {loadingParties ? (
+                <div className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-gray-500">
+                  Loading{" "}
+                  {partyLabel.toLowerCase()}
+                  s...
+                </div>
+              ) : parties.length ===
+                0 ? (
+                <div className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                  No{" "}
+                  {partyLabel.toLowerCase()}
+                  s found.
+                </div>
+              ) : (
+                <select
+                  value={
+                    form.supplierId
+                  }
+                  onChange={
+                    handlePartyChange
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3"
+                >
+                  <option value="">
+                    Select{" "}
+                    {partyLabel.toLowerCase()}
+                  </option>
+
+                  {parties.map(
+                    (party) => (
+                      <option
+                        key={
+                          party.id
+                        }
+                        value={
+                          party.id
+                        }
+                      >
+                        {party.name ||
+                          party.companyName ||
+                          "Unnamed"}
+                      </option>
+                    )
+                  )}
+                </select>
+              )}
+
+            </div>
+          )}
+
+          {/* ---------------------------------------------
+              Party Details
+          --------------------------------------------- */}
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
             <Field
-              label="Supplier Name"
-              value={form.supplier.name}
-              editing={editing}
+              label={`${partyLabel} Name`}
+              value={
+                form.supplier.name
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateSupplier(
                   "name",
@@ -1177,8 +1682,12 @@ export default function PurchaseOrderDetailPage() {
 
             <Field
               label="ABN"
-              value={form.supplier.abn}
-              editing={editing}
+              value={
+                form.supplier.abn
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateSupplier(
                   "abn",
@@ -1189,8 +1698,12 @@ export default function PurchaseOrderDetailPage() {
 
             <Field
               label="Contact"
-              value={form.supplier.contact}
-              editing={editing}
+              value={
+                form.supplier.contact
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateSupplier(
                   "contact",
@@ -1202,8 +1715,12 @@ export default function PurchaseOrderDetailPage() {
             <Field
               label="Email"
               type="email"
-              value={form.supplier.email}
-              editing={editing}
+              value={
+                form.supplier.email
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateSupplier(
                   "email",
@@ -1214,8 +1731,12 @@ export default function PurchaseOrderDetailPage() {
 
             <Field
               label="Phone"
-              value={form.supplier.phone}
-              editing={editing}
+              value={
+                form.supplier.phone
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateSupplier(
                   "phone",
@@ -1226,8 +1747,12 @@ export default function PurchaseOrderDetailPage() {
 
             <Field
               label="Address"
-              value={form.supplier.address}
-              editing={editing}
+              value={
+                form.supplier.address
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateSupplier(
                   "address",
@@ -1252,7 +1777,9 @@ export default function PurchaseOrderDetailPage() {
 
           {editing ? (
             <textarea
-              value={form.siteAddress}
+              value={
+                form.siteAddress
+              }
               onChange={(e) =>
                 updateForm(
                   "siteAddress",
@@ -1265,9 +1792,12 @@ export default function PurchaseOrderDetailPage() {
             />
           ) : (
             <div className="rounded-lg bg-gray-50 p-4">
+
               <p className="whitespace-pre-line">
-                {form.siteAddress || "-"}
+                {form.siteAddress ||
+                  "-"}
               </p>
+
             </div>
           )}
 
@@ -1305,7 +1835,8 @@ export default function PurchaseOrderDetailPage() {
 
           </div>
 
-          {form.items.length === 0 ? (
+          {form.items.length ===
+          0 ? (
             <p className="text-gray-500">
               No items.
             </p>
@@ -1347,10 +1878,15 @@ export default function PurchaseOrderDetailPage() {
                 <tbody>
 
                   {form.items.map(
-                    (item, index) => {
+                    (
+                      item,
+                      index
+                    ) => {
 
                       const qty =
-                        Number(item.qty) || 0;
+                        Number(
+                          item.qty
+                        ) || 0;
 
                       const unitPrice =
                         Number(
@@ -1358,7 +1894,8 @@ export default function PurchaseOrderDetailPage() {
                         ) || 0;
 
                       const itemTotal =
-                        qty * unitPrice;
+                        qty *
+                        unitPrice;
 
                       return (
                         <tr
@@ -1374,11 +1911,15 @@ export default function PurchaseOrderDetailPage() {
                                 value={
                                   item.description
                                 }
-                                onChange={(e) =>
+                                onChange={(
+                                  e
+                                ) =>
                                   updateItem(
                                     index,
                                     "description",
-                                    e.target.value
+                                    e
+                                      .target
+                                      .value
                                   )
                                 }
                                 className="w-full rounded-lg border border-gray-300 px-3 py-2"
@@ -1401,11 +1942,15 @@ export default function PurchaseOrderDetailPage() {
                                 value={
                                   item.qty
                                 }
-                                onChange={(e) =>
+                                onChange={(
+                                  e
+                                ) =>
                                   updateItem(
                                     index,
                                     "qty",
-                                    e.target.value
+                                    e
+                                      .target
+                                      .value
                                   )
                                 }
                                 className="w-24 rounded-lg border border-gray-300 px-3 py-2"
@@ -1426,11 +1971,15 @@ export default function PurchaseOrderDetailPage() {
                                 value={
                                   item.unitPrice
                                 }
-                                onChange={(e) =>
+                                onChange={(
+                                  e
+                                ) =>
                                   updateItem(
                                     index,
                                     "unitPrice",
-                                    e.target.value
+                                    e
+                                      .target
+                                      .value
                                   )
                                 }
                                 className="w-32 rounded-lg border border-gray-300 px-3 py-2"
@@ -1493,7 +2042,10 @@ export default function PurchaseOrderDetailPage() {
               </span>
 
               <span>
-                ${subtotal.toFixed(2)}
+                $
+                {subtotal.toFixed(
+                  2
+                )}
               </span>
 
             </div>
@@ -1505,7 +2057,10 @@ export default function PurchaseOrderDetailPage() {
               </span>
 
               <span>
-                ${gst.toFixed(2)}
+                $
+                {gst.toFixed(
+                  2
+                )}
               </span>
 
             </div>
@@ -1517,7 +2072,10 @@ export default function PurchaseOrderDetailPage() {
               </span>
 
               <span>
-                ${total.toFixed(2)}
+                $
+                {total.toFixed(
+                  2
+                )}
               </span>
 
             </div>
@@ -1538,7 +2096,9 @@ export default function PurchaseOrderDetailPage() {
 
           {editing ? (
             <textarea
-              value={form.scopeOfWork}
+              value={
+                form.scopeOfWork
+              }
               onChange={(e) =>
                 updateForm(
                   "scopeOfWork",
@@ -1554,7 +2114,9 @@ export default function PurchaseOrderDetailPage() {
 
               {form.scopeOfWork ? (
                 <p className="whitespace-pre-line leading-7">
-                  {form.scopeOfWork}
+                  {
+                    form.scopeOfWork
+                  }
                 </p>
               ) : (
                 <p className="text-gray-500">
@@ -1581,8 +2143,12 @@ export default function PurchaseOrderDetailPage() {
 
             <Field
               label="Project Manager"
-              value={form.projectManager}
-              editing={editing}
+              value={
+                form.projectManager
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateForm(
                   "projectManager",
@@ -1597,7 +2163,9 @@ export default function PurchaseOrderDetailPage() {
               value={
                 form.projectManagerEmail
               }
-              editing={editing}
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateForm(
                   "projectManagerEmail",
@@ -1608,8 +2176,12 @@ export default function PurchaseOrderDetailPage() {
 
             <Field
               label="Site Manager"
-              value={form.siteManager}
-              editing={editing}
+              value={
+                form.siteManager
+              }
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateForm(
                   "siteManager",
@@ -1624,7 +2196,9 @@ export default function PurchaseOrderDetailPage() {
               value={
                 form.siteManagerEmail
               }
-              editing={editing}
+              editing={
+                editing
+              }
               onChange={(value) =>
                 updateForm(
                   "siteManagerEmail",
@@ -1652,7 +2226,9 @@ export default function PurchaseOrderDetailPage() {
             <PDFDownloadLink
               document={
                 <PurchaseOrderPDF
-                  data={poDataForPDF}
+                  data={
+                    poDataForPDF
+                  }
                 />
               }
               fileName={`${
@@ -1661,7 +2237,9 @@ export default function PurchaseOrderDetailPage() {
               }.pdf`}
               className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
             >
-              {({ loading }) =>
+              {({
+                loading,
+              }) =>
                 loading
                   ? "Preparing PDF..."
                   : "Download PDF"
@@ -1678,7 +2256,9 @@ export default function PurchaseOrderDetailPage() {
               showToolbar
             >
               <PurchaseOrderPDF
-                data={poDataForPDF}
+                data={
+                  poDataForPDF
+                }
               />
             </PDFViewer>
 
@@ -1687,6 +2267,7 @@ export default function PurchaseOrderDetailPage() {
         </section>
 
       </div>
+
     </div>
   );
 }
@@ -1712,9 +2293,13 @@ function Field({
       {editing ? (
         <input
           type={type}
-          value={value || ""}
+          value={
+            value || ""
+          }
           onChange={(e) =>
-            onChange(e.target.value)
+            onChange(
+              e.target.value
+            )
           }
           className="w-full rounded-lg border border-gray-300 px-4 py-3"
         />
