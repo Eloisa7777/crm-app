@@ -243,13 +243,6 @@ export default function HomePage() {
           </p>
         </div>
 
-        <Link
-          href="/login"
-          className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
-        >
-          Logout
-        </Link>
-
       </header>
 
       {/* =====================================================

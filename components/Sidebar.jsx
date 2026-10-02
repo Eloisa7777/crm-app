@@ -116,6 +116,16 @@ export default function Sidebar({ role }) {
           })}
         </div>
       </nav>
+  
+        <div className="flex items-center gap-3 mb-4 px-6 ">
+        <Link
+          href="/login"
+          className=" rounded-lg bg-indigo-800 px-5 py-2.5 border border-gray-200 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+        >
+          Logout
+        </Link>
+
+        </div>
 
       {/* User */}
       <div className="p-4 border-t border-gray-200">
