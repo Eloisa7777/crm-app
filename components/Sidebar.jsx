@@ -40,6 +40,11 @@ const menuItems = [
     icon: "□",
   },
   {
+    name: "Bills",
+    href: "/bills",
+    icon: "□",
+  },
+  {
     name: "Invoices",
     href: "/invoices",
     icon: "▤",

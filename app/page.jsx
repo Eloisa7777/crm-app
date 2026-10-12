@@ -25,6 +25,7 @@ export default function HomePage() {
     useState([]);
   const [attentionInvoices, setAttentionInvoices] =
     useState([]);
+  const [attentionBills, setAttentionBills] = useState([]);
   const [attentionPurchaseOrders, setAttentionPurchaseOrders] =
     useState([]);
 
@@ -151,6 +152,31 @@ export default function HomePage() {
 
         setAttentionInvoices(invoices);
 
+
+        /* =====================================================
+           Attention - Bills
+        ===================================================== */
+
+        const billSnapshot = await getDocs(
+          collection(db, "bills")
+        );
+
+        const bills = [];
+
+        billSnapshot.forEach((doc) => {
+          const data = doc.data();
+
+          if (isSameDate(data.dueDate, today)) {
+            bills.push({
+              id: doc.id,
+              ...data,
+            });
+          }
+        });
+
+        setAttentionBills(bills);
+
+
         /* =====================================================
            Attention - Purchase Orders
         ===================================================== */
@@ -222,6 +248,7 @@ export default function HomePage() {
   const attentionCount =
     attentionQuotes.length +
     attentionInvoices.length +
+    attentionBills.length +
     attentionPurchaseOrders.length;
 
   return (
@@ -455,6 +482,68 @@ export default function HomePage() {
                               {invoice.total != null
                                 ? `$${Number(
                                     invoice.total
+                                  ).toLocaleString(
+                                    "en-AU",
+                                    {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    }
+                                  )}`
+                                : ""}
+                            </span>
+
+                            <AttentionBadge>
+                              Due Today
+                            </AttentionBadge>
+
+                          </div>
+
+                        </Link>
+                      )
+                    )}
+                  </AttentionGroup>
+                )}
+
+                {/* =================================================
+                    Bills
+                ================================================= */}
+
+                {attentionBills.length > 0 && (
+                  <AttentionGroup
+                    title="Bills"
+                    count={attentionBills.length}
+                  >
+                    {attentionBills.map(
+                      (bill) => (
+                        <Link
+                          key={bill.id}
+                          href={`/bills/${bill.id}`}
+                          className="flex items-center justify-between px-6 py-4 border-t border-gray-100 hover:bg-gray-50 transition"
+                        >
+
+                          <div className="min-w-0">
+
+                            <div className="text-sm font-medium text-gray-900">
+                              {bill.billNumber ||
+                                bill.number ||
+                                `Bill ${bill.id}`}
+                            </div>
+
+                            <div className="text-xs text-gray-500 mt-1 truncate">
+                              {bill.supplierName ||
+                                bill.supplier?.name ||
+                                bill.projectName ||
+                                "—"}
+                            </div>
+
+                          </div>
+
+                          <div className="ml-4 flex items-center gap-3">
+
+                            <span className="text-sm font-medium text-gray-900">
+                              {bill.total != null
+                                ? `$${Number(
+                                    bill.total
                                   ).toLocaleString(
                                     "en-AU",
                                     {
