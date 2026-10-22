@@ -348,10 +348,6 @@ export default function SendPO({
               placeholder="account@yjliningscreation.com.au"
               className="w-full rounded-md border border-gray-300 px-3 py-2"
             />
-
-            <p className="text-xs text-gray-500">
-              The From email address will automatically be included in CC.
-            </p>
           </div>
 
           {/* To */}

@@ -3,7 +3,7 @@ import { Resend } from "resend";
 
 export const runtime = "nodejs";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY1);
 
 const ALLOWED_FROM_DOMAIN = "yjliningscreation.com.au";
 
@@ -30,9 +30,9 @@ function normaliseEmails(value) {
 
 export async function POST(request) {
   try {
-    if (!process.env.RESEND_API_KEY) {
+    if (!process.env.RESEND_API_KEY1) {
       return Response.json(
-        { error: "RESEND_API_KEY is not configured." },
+        { error: "RESEND_API_KEY1 is not configured." },
         { status: 500 }
       );
     }
