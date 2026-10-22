@@ -2214,12 +2214,14 @@ export default function PurchaseOrderDetailPage() {
         {/* =====================================================
             Send PO Email
         ===================================================== */}
-
+        <section className="mb-6 text-start rounded-xl bg-white p-6 shadow-sm">
         <SendPO
           purchaseOrder={purchaseOrder}
           supplier={form.supplier}
           poDataForPDF={poDataForPDF}
         />
+        </section>
+        
 
         {/* =================================================
             PDF Preview

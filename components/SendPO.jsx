@@ -67,7 +67,7 @@ export default function SendPO({
   const [defaultCC, setDefaultCC] = useState(
     DEFAULT_CC_EMAILS.map((email) => ({
       email,
-      checked: true,
+      checked: false,
     }))
   );
 
@@ -92,7 +92,7 @@ export default function SendPO({
     "PurchaseOrder";
 
   const filename = useMemo(
-    () => `PO-${poNumber}.pdf`,
+    () => `${poNumber}.pdf`,
     [poNumber]
   );
 
@@ -172,17 +172,16 @@ export default function SendPO({
   }
 
   // ==========================================================
-  // 8. 点击 Send PO：先展开设置，再发送
+  // 8. 点击 Send PO：展开设置，Send EMIAL 准备发送邮件
   // ==========================================================
 
   async function handleSendPO() {
     setStatus({ type: "", text: "" });
 
-    // 第一次点击只展开设置，让用户确认邮件内容
     if (!settingsExpanded) {
       setSettingsExpanded(true);
       return;
-    }
+   }
 
     const cleanFrom = fromEmail.trim();
     const recipients = parseEmails(toEmail);
@@ -317,13 +316,13 @@ export default function SendPO({
           if (!settingsExpanded) {
             setSettingsExpanded(true);
           } else {
-            handleSendPO();
+            setSettingsExpanded(false)
           }
         }}
         disabled={sending}
         className="cursor-pointer rounded-md bg-indigo-800 px-5 py-2.5 font-medium text-white hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {sending ? "Sending..." : "Send PO"}
+        {sending ? "Sending..." : "Edit PO Email"}
       </button>
 
       {/* 邮件设置：默认收起，点击 Send PO 后展开 */}
