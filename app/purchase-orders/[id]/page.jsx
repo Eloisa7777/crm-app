@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import SendPO from "@/components/SendPO";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -2210,6 +2211,15 @@ export default function PurchaseOrderDetailPage() {
           </div>
 
         </section>
+        {/* =====================================================
+            Send PO Email
+        ===================================================== */}
+
+        <SendPO
+          purchaseOrder={purchaseOrder}
+          supplier={form.supplier}
+          poDataForPDF={poDataForPDF}
+        />
 
         {/* =================================================
             PDF Preview
