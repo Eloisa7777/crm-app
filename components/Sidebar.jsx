@@ -49,6 +49,11 @@ const menuItems = [
     href: "/invoices",
     icon: "▤",
   },
+    {
+    name: "Sub-Invoices",
+    href: "/sub-invoices",
+    icon: "▤",
+  },
 ];
 
 export default function Sidebar({ role }) {
