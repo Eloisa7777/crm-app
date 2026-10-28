@@ -4,8 +4,8 @@ import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 // ============================================================
 // Login API
-// 1. 接收前端 Firebase Auth 登录后获得的 ID Token
-// 2. 验证 Token
+// 1. 接收 Firebase Auth 登录后的 ID Token
+// 2. 使用 Firebase Admin 验证 Token
 // 3. 从 Custom Claims 读取角色
 // 4. 创建 HttpOnly Session Cookie
 // ============================================================
@@ -13,24 +13,33 @@ import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 export const runtime = "nodejs";
 
 const SESSION_COOKIE_NAME = "yj_session";
-const SESSION_DURATION_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
-const vercelEnv = process.env.VERCEL_ENV;
-const isLocalDevelopment =
-  process.env.NODE_ENV === "development";
+const SESSION_DURATION_MS = 5 * 24 * 60 * 60 * 1000;
 const ALLOWED_ROLES = new Set(["admin", "yjpo", "yjest"]);
 
-export async function POST(request) {
-  // 本地不使用 GCP 服务端凭证。
-if (
-  !isLocalDevelopment &&
-  vercelEnv !== "preview" &&
-  vercelEnv !== "production"
-) {
-  return Response.json(
-    { error: "Login is unavailable in this environment." },
-    { status: 503 }
-  );
+function logStepError(step, error) {
+  console.error(`[Login] ${step} failed:`, {
+    code: error?.code ?? "unknown",
+    message: error?.message ?? "Unknown error",
+  });
 }
+
+export async function POST(request) {
+  const isLocalDevelopment = process.env.NODE_ENV === "development";
+  const vercelEnv = process.env.VERCEL_ENV;
+
+  // 仅允许本地开发、Vercel Preview 和 Production。
+  if (
+    !isLocalDevelopment &&
+    vercelEnv !== "preview" &&
+    vercelEnv !== "production"
+  ) {
+    return NextResponse.json(
+      { error: "Login is unavailable in this environment." },
+      { status: 503 }
+    );
+  }
+
+  let step = "Reading request";
 
   try {
     const body = await request.json();
@@ -43,9 +52,12 @@ if (
       );
     }
 
+    step = "Initializing Firebase Admin";
+
     const { adminAuth } = getFirebaseAdminServices();
 
-    // 验证 Firebase ID Token，并检查用户是否已被撤销权限。
+    step = "Verifying Firebase ID token";
+
     const decodedToken = await adminAuth.verifyIdToken(idToken, true);
 
     // 角色必须来自可信的 Firebase Custom Claims。
@@ -58,7 +70,8 @@ if (
       );
     }
 
-    // 创建服务端 Session Cookie。
+    step = "Creating session cookie";
+
     const sessionCookie = await adminAuth.createSessionCookie(idToken, {
       expiresIn: SESSION_DURATION_MS,
     });
@@ -72,18 +85,15 @@ if (
       name: SESSION_COOKIE_NAME,
       value: sessionCookie,
       httpOnly: true,
-      secure: true,
+      secure: !isLocalDevelopment,
       sameSite: "lax",
       path: "/",
       maxAge: Math.floor(SESSION_DURATION_MS / 1000),
     });
 
-    // 不再创建 yj_auth 或 yj_role Cookie。
-    // 权限验证应使用经过验证的 Session Cookie。
     return response;
   } catch (error) {
-    // 服务端只记录错误摘要，不记录 ID Token 或 Session Cookie。
-    console.error("Login API failed:", error.code || error.message);
+    logStepError(step, error);
 
     return NextResponse.json(
       { error: "Login failed. Please try again." },
