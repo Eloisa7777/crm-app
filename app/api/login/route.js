@@ -71,24 +71,39 @@ export async function POST(request) {
 
   try {
     decodedToken = await adminAuth.verifyIdToken(idToken, true);
-  } catch (error) {
-    logError("ID token verification", error);
+} catch (error) {
+  console.error("[Login] ID token verification failed", {
+    code: error?.code,
+    message: error?.message,
+    name: error?.name,
+  });
 
-    // 这里先标记验证阶段；具体根因以 Vercel 日志为准。
-    return errorResponse("FIREBASE_ID_TOKEN_VERIFICATION_FAILED", 401);
-  }
+  return NextResponse.json(
+    {
+      error: "FIREBASE_ID_TOKEN_VERIFICATION_FAILED",
+      detail: error?.code || error?.message || "Unknown error",
+    },
+    { status: 401 }
+  );
+}
 
-  // Step 3: Check the trusted Custom Claims role.
-  const role = decodedToken.role;
+  // Step 3: Check the trusted Custom Claims role. （默认yjest)
+let role = decodedToken.role;
 
-  if (typeof role !== "string" || !ALLOWED_ROLES.has(role)) {
-    console.warn("[Login] User has no authorized CRM role", {
-      uid: decodedToken.uid,
-      role: typeof role === "string" ? role : "missing",
-    });
+// 没有设置角色时，默认使用 yjest
+if (role == null || role === "") {
+  role = "yjest";
+}
 
-    return errorResponse("UNAUTHORIZED_CRM_ROLE", 403);
-  }
+// 只允许 CRM 已定义的角色
+if (typeof role !== "string" || !ALLOWED_ROLES.has(role)) {
+  console.warn("[Login] User has no authorized CRM role", {
+    uid: decodedToken.uid,
+    role: typeof role === "string" ? role : "invalid",
+  });
+
+  return errorResponse("UNAUTHORIZED_CRM_ROLE", 403);
+}
 
   // Step 4: Create the session cookie.
   let sessionCookie;
