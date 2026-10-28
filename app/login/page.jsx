@@ -1,17 +1,12 @@
 
 "use client";
 
-// ============================================================
-// YJ CRM Login Page
-// 1. Firebase Authentication: email + password
-// 2. Obtain Firebase ID Token
-// 3. Send token to /api/login
-// 4. API verifies token and creates HTTP-only session cookie
-// ============================================================
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
@@ -24,23 +19,23 @@ export default function LoginPage() {
 
   async function handleLogin(e) {
     e.preventDefault();
-
     setError("");
     setLoading(true);
 
     try {
-      // 1. Sign in with Firebase Authentication
+      // 1. 使用 Firebase Authentication 验证账号密码
       const credential = await signInWithEmailAndPassword(
         auth,
         email.trim(),
         password
       );
 
-      // 2. Get Firebase ID Token
+      // 2. 获取最新的 Firebase ID Token
+ 
       const idToken = await credential.user.getIdToken(true);
 
-      // 3. Send ID Token to the server
-      const res = await fetch("/api/login", {
+      // 3. 请求 Next.js 服务端验证 Token 并创建 Session
+      const response = await fetch("/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -49,134 +44,120 @@ export default function LoginPage() {
         body: JSON.stringify({ idToken }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const result = await response.json();
 
-      if (!res.ok) {
-        // Prevent a Firebase client session remaining active
-        // if the server rejects the CRM role or session.
-        const { signOut } = await import("firebase/auth");
+      // 4. 服务端未能建立 Session 时，不允许进入 CRM
+      if (!response.ok) {
+        // 避免留下只有客户端认证、没有服务端 Session 的状态
         await signOut(auth);
 
-        setError(data.error || "Login failed. Please try again.");
-        return;
-      }
+        const messages = {
+          FIREBASE_ADMIN_INITIALIZATION_FAILED:
+            "服务端认证初始化失败，请检查部署配置",
+          FIREBASE_ID_TOKEN_VERIFICATION_FAILED:
+            "服务端无法验证登录凭据，请检查 Firebase Admin 配置",
+          UNAUTHORIZED_CRM_ROLE:
+            "该账号尚未分配有效的 CRM 角色",
+          SESSION_COOKIE_CREATION_FAILED:
+            "无法创建登录会话，请稍后重试",
+        };
 
-      // 4. Navigate after the server creates the session cookie
-      router.replace("/");
-      router.refresh();
-    } catch (err) {
-      console.error("Login failed:", err.code || err.message);
-
-      if (
-        err.code === "auth/invalid-credential" ||
-        err.code === "auth/wrong-password" ||
-        err.code === "auth/user-not-found"
-      ) {
-        setError("Incorrect email or password.");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Too many attempts. Please try again later.");
-      } else if (err.code === "auth/network-request-failed") {
-        setError("Network error. Please check your connection.");
-      } else {
-        setError(
-          err.message?.includes("Firebase Admin")
-            ? "Server authentication is not configured correctly."
-            : "Unable to login. Please try again."
+        throw new Error(
+          messages[result.error] ||
+          result.error ||
+          "登录失败，请重试"
         );
       }
+
+      // 5. Session 建立成功后才跳转
+      router.replace("/");
+      router.refresh();
+
+    } catch (err) {
+      console.error("[Login] Firebase sign-in failed:", err);
+
+      const messages = {
+        "auth/invalid-credential": "邮箱或密码不正确",
+        "auth/invalid-email": "邮箱格式不正确",
+        "auth/user-disabled": "该账号已被停用",
+        "auth/too-many-requests": "尝试次数过多，请稍后再试",
+        "auth/network-request-failed": "网络连接失败，请检查网络",
+      };
+
+      setError(
+        messages[err.code] ||
+        "登录失败，请检查 Firebase 配置和账号状态"
+      );
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-          {/* Header */}
-          <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-gray-900">
-              YJ Building Evolution
-            </h1>
-
-            <p className="mt-2 text-sm text-gray-500">
-              Management System
-            </p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-5">
-            {/* Email */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Email
-              </label>
-
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter email address"
-                autoComplete="username"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg
-                  focus:outline-none focus:ring-2 focus:ring-gray-900
-                  focus:border-transparent"
-                required
-                disabled={loading}
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Password
-              </label>
-
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                autoComplete="current-password"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg
-                  focus:outline-none focus:ring-2 focus:ring-gray-900
-                  focus:border-transparent"
-                required
-                disabled={loading}
-              />
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div
-                role="alert"
-                className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
-              >
-                {error}
-              </div>
-            )}
-
-            {/* Login */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-800 text-gray-100 py-2.5 rounded-lg
-                font-medium hover:bg-amber-400 hover:text-black
-                hover:transition disabled:opacity-50
-                disabled:cursor-not-allowed cursor-pointer"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
-          </form>
+    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <form
+        onSubmit={handleLogin}
+        className="w-full max-w-md space-y-5 rounded-xl border bg-white p-8 shadow-sm"
+      >
+        <div>
+          <h1 className="text-2xl font-bold">YJ CRM</h1>
+          <p className="mt-2 text-sm text-gray-500">
+            Sign in to your account
+          </p>
         </div>
-      </div>
-    </div>
+
+        <div>
+          <label
+            htmlFor="email"
+            className="mb-1 block text-sm font-medium"
+          >
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="username"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-md border p-3"
+            placeholder="name@company.com"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="password"
+            className="mb-1 block text-sm font-medium"
+          >
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-md border p-3"
+            placeholder="Enter password"
+          />
+        </div>
+
+        {error && (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-md bg-black p-3 text-white disabled:opacity-50"
+        >
+          {loading ? "Signing in..." : "Sign in"}
+        </button>
+      </form>
+    </main>
   );
 }
