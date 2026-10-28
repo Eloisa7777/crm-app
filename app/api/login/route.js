@@ -4,10 +4,11 @@ import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 // ============================================================
 // Login API
-// 1. 接收 Firebase Auth 登录后的 ID Token
-// 2. 使用 Firebase Admin 验证 Token
-// 3. 从 Custom Claims 读取角色
-// 4. 创建 HttpOnly Session Cookie
+// 1. 接收 Firebase ID Token
+// 2. 初始化 Firebase Admin
+// 3. 验证 Token 与用户状态
+// 4. 验证 Custom Claims 角色
+// 5. 创建 HttpOnly Session Cookie
 // ============================================================
 
 export const runtime = "nodejs";
@@ -16,88 +17,107 @@ const SESSION_COOKIE_NAME = "yj_session";
 const SESSION_DURATION_MS = 5 * 24 * 60 * 60 * 1000;
 const ALLOWED_ROLES = new Set(["admin", "yjpo", "yjest"]);
 
-function logStepError(step, error) {
-  console.error(`[Login] ${step} failed:`, {
+function logError(step, error) {
+  // 只记录错误信息，不记录 ID Token、密码或 Cookie。
+  console.error(`[Login] ${step} failed`, {
     code: error?.code ?? "unknown",
     message: error?.message ?? "Unknown error",
   });
+}
+
+function errorResponse(error, status) {
+  return NextResponse.json({ error }, { status });
 }
 
 export async function POST(request) {
   const isLocalDevelopment = process.env.NODE_ENV === "development";
   const vercelEnv = process.env.VERCEL_ENV;
 
-  // 仅允许本地开发、Vercel Preview 和 Production。
   if (
     !isLocalDevelopment &&
     vercelEnv !== "preview" &&
     vercelEnv !== "production"
   ) {
-    return NextResponse.json(
-      { error: "Login is unavailable in this environment." },
-      { status: 503 }
-    );
+    return errorResponse("LOGIN_ENVIRONMENT_UNAVAILABLE", 503);
   }
 
-  let step = "Reading request";
+  let body;
 
   try {
-    const body = await request.json();
-    const idToken = body?.idToken;
+    body = await request.json();
+  } catch {
+    return errorResponse("INVALID_REQUEST_BODY", 400);
+  }
 
-    if (typeof idToken !== "string" || !idToken.trim()) {
-      return NextResponse.json(
-        { error: "Missing Firebase ID token" },
-        { status: 400 }
-      );
-    }
+  const idToken = body?.idToken;
 
-    step = "Initializing Firebase Admin";
+  if (typeof idToken !== "string" || !idToken.trim()) {
+    return errorResponse("MISSING_ID_TOKEN", 400);
+  }
 
-    const { adminAuth } = getFirebaseAdminServices();
+  // Step 1: Initialize Firebase Admin.
+  let adminAuth;
 
-    step = "Verifying Firebase ID token";
+  try {
+    ({ adminAuth } = getFirebaseAdminServices());
+  } catch (error) {
+    logError("Firebase Admin initialization", error);
 
-    const decodedToken = await adminAuth.verifyIdToken(idToken, true);
+    return errorResponse("FIREBASE_ADMIN_INITIALIZATION_FAILED", 503);
+  }
 
-    // 角色必须来自可信的 Firebase Custom Claims。
-    const role = decodedToken.role;
+  // Step 2: Verify the Firebase ID Token.
+  let decodedToken;
 
-    if (!ALLOWED_ROLES.has(role)) {
-      return NextResponse.json(
-        { error: "User does not have an authorized CRM role" },
-        { status: 403 }
-      );
-    }
+  try {
+    decodedToken = await adminAuth.verifyIdToken(idToken, true);
+  } catch (error) {
+    logError("ID token verification", error);
 
-    step = "Creating session cookie";
+    // 这里先标记验证阶段；具体根因以 Vercel 日志为准。
+    return errorResponse("FIREBASE_ID_TOKEN_VERIFICATION_FAILED", 401);
+  }
 
-    const sessionCookie = await adminAuth.createSessionCookie(idToken, {
+  // Step 3: Check the trusted Custom Claims role.
+  const role = decodedToken.role;
+
+  if (typeof role !== "string" || !ALLOWED_ROLES.has(role)) {
+    console.warn("[Login] User has no authorized CRM role", {
+      uid: decodedToken.uid,
+      role: typeof role === "string" ? role : "missing",
+    });
+
+    return errorResponse("UNAUTHORIZED_CRM_ROLE", 403);
+  }
+
+  // Step 4: Create the session cookie.
+  let sessionCookie;
+
+  try {
+    sessionCookie = await adminAuth.createSessionCookie(idToken, {
       expiresIn: SESSION_DURATION_MS,
     });
-
-    const response = NextResponse.json({
-      success: true,
-      role,
-    });
-
-    response.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: sessionCookie,
-      httpOnly: true,
-      secure: !isLocalDevelopment,
-      sameSite: "lax",
-      path: "/",
-      maxAge: Math.floor(SESSION_DURATION_MS / 1000),
-    });
-
-    return response;
   } catch (error) {
-    logStepError(step, error);
+    logError("Session cookie creation", error);
 
-    return NextResponse.json(
-      { error: "Login failed. Please try again." },
-      { status: 401 }
-    );
+    return errorResponse("SESSION_COOKIE_CREATION_FAILED", 500);
   }
+
+  // Step 5: Return the session cookie.
+  const response = NextResponse.json({
+    success: true,
+    role,
+  });
+
+  response.cookies.set({
+    name: SESSION_COOKIE_NAME,
+    value: sessionCookie,
+    httpOnly: true,
+    secure: !isLocalDevelopment,
+    sameSite: "lax",
+    path: "/",
+    maxAge: Math.floor(SESSION_DURATION_MS / 1000),
+  });
+
+  return response;
 }
