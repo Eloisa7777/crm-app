@@ -1,14 +1,17 @@
 
-import { NextResponse, type NextRequest } from "next/server";
-import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
-
 // ============================================================
 // CRM Proxy
-// 1. 放行登录页面和公开资源
-// 2. API 由各自的 Route Handler 独立验证
-// 3. 其他页面只验证 Firebase Session Cookie
-// 4. 暂时不限制用户角色
+// 1. 公开登录、登出及静态资源
+// 2. 验证 Firebase Session Cookie
+// 3. 未登录或 Session 无效时跳转登录页
+// 4. 所有已登录用户均可访问页面，不区分角色
+//
+// 注意：API 的数据读写权限仍需在各自的服务端 Route Handler
+// 中单独验证，不能仅依赖 Proxy。
 // ============================================================
+
+import { NextResponse, type NextRequest } from "next/server";
+import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 const SESSION_COOKIE_NAME = "yj_session";
 
@@ -18,8 +21,8 @@ const PUBLIC_PATHS = [
   "/api/logout",
 ];
 
-function matchesPath(pathname: string, paths: string[]) {
-  return paths.some(
+function matchesPath(pathname: string, allowedPaths: string[]) {
+  return allowedPaths.some(
     (path) =>
       pathname === path ||
       pathname.startsWith(`${path}/`)
@@ -29,7 +32,10 @@ function matchesPath(pathname: string, paths: string[]) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ----------------------------------------------------------
   // 1. Public pages and static resources
+  // ----------------------------------------------------------
+
   if (
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
@@ -39,12 +45,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. API endpoints must perform their own authentication.
+  // ----------------------------------------------------------
+  // 2. API requests
+  // API permissions must be checked in their own Route Handlers.
+  // ----------------------------------------------------------
+
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 
-  // 3. Read the Firebase Session Cookie.
+  // ----------------------------------------------------------
+  // 3. Read Firebase Session Cookie
+  // ----------------------------------------------------------
+
   const sessionCookie = request.cookies.get(
     SESSION_COOKIE_NAME
   )?.value;
@@ -55,26 +68,24 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // 4. Verify Session only. No role checks for now.
+  // ----------------------------------------------------------
+  // 4. Verify Firebase Session
+  // No role checks; any valid signed-in user can access pages.
+  // ----------------------------------------------------------
+
   try {
     const { adminAuth } = getFirebaseAdminServices();
 
-    await adminAuth.verifySessionCookie(
-      sessionCookie,
-      false
-    );
+    await adminAuth.verifySessionCookie(sessionCookie, false);
 
     return NextResponse.next();
   } catch (error) {
+    // Do not log raw credentials or token-related error messages.
     console.error("[Proxy] Session verification failed", {
       code:
-        error instanceof Error && "code" in error
+        typeof error === "object" && error !== null && "code" in error
           ? String(error.code)
           : "unknown",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unknown error",
     });
 
     const response = NextResponse.redirect(
@@ -85,9 +96,7 @@ export async function proxy(request: NextRequest) {
       name: SESSION_COOKIE_NAME,
       value: "",
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production" ||
-        process.env.VERCEL === "1",
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: 0,
