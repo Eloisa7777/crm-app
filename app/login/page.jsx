@@ -31,48 +31,18 @@ export default function LoginPage() {
       );
 
       // 2. 获取最新的 Firebase ID Token
- 
       const idToken = await credential.user.getIdToken(true);
 
-      // 3. 请求 Next.js 服务端验证 Token 并创建 Session
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({ idToken }),
-      });
-
-      const result = await response.json();
-
-      // 4. 服务端未能建立 Session 时，不允许进入 CRM
-      if (!response.ok) {
-        // 避免留下只有客户端认证、没有服务端 Session 的状态
-        await signOut(auth);
-
-        const messages = {
-          FIREBASE_ADMIN_INITIALIZATION_FAILED:
-            "服务端认证初始化失败，请检查部署配置",
-          FIREBASE_ID_TOKEN_VERIFICATION_FAILED:
-            "服务端无法验证登录凭据，请检查 Firebase Admin 配置",
-          UNAUTHORIZED_CRM_ROLE:
-            "该账号尚未分配有效的 CRM 角色",
-          SESSION_COOKIE_CREATION_FAILED:
-            "无法创建登录会话，请稍后重试",
-        };
-
-        throw new Error(
-          messages[result.error] ||
-          result.error ||
-          "登录失败，请重试"
-        );
+      // 3. 暂存为后续服务端 Session 接入的接口
+      // 这里暂时只完成 Firebase 客户端登录。
+      // 服务端 Session 尚未建立，因此不要把此版本
+      // 当作完整的 CRM 生产环境权限保护方案。
+      if (!idToken) {
+        throw new Error("无法获取 Firebase 登录令牌");
       }
 
-      // 5. Session 建立成功后才跳转
       router.replace("/");
       router.refresh();
-
     } catch (err) {
       console.error("[Login] Firebase sign-in failed:", err);
 

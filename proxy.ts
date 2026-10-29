@@ -1,19 +1,6 @@
 
-// ============================================================
-// CRM Proxy
-// 1. 公开登录、登出及静态资源
-// 2. 验证 Firebase Session Cookie
-// 3. 未登录或 Session 无效时跳转登录页
-// 4. 所有已登录用户均可访问页面，不区分角色
-//
-// 注意：API 的数据读写权限仍需在各自的服务端 Route Handler
-// 中单独验证，不能仅依赖 Proxy。
-// ============================================================
-
-import { NextResponse, type NextRequest } from "next/server";
-import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
-
-const SESSION_COOKIE_NAME = "yj_session";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -21,94 +8,99 @@ const PUBLIC_PATHS = [
   "/api/logout",
 ];
 
-function matchesPath(pathname: string, allowedPaths: string[]) {
-  return allowedPaths.some(
-    (path) =>
-      pathname === path ||
-      pathname.startsWith(`${path}/`)
-  );
-}
+const PO_ALLOWED_PATHS = [
+  "/purchase-orders",
+  "/suppliers",
+  "/subcontractors",
+];
 
-export async function proxy(request: NextRequest) {
+const EST_ALLOWED_PATHS = [
+  "/quote",
+];
+
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ----------------------------------------------------------
-  // 1. Public pages and static resources
-  // ----------------------------------------------------------
+  /* =====================================================
+     Public pages / APIs / static assets
+  ===================================================== */
 
   if (
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname === "/logo.png" ||
-    matchesPath(pathname, PUBLIC_PATHS)
+    PUBLIC_PATHS.some(
+      (path) =>
+        pathname === path ||
+        pathname.startsWith(`${path}/`)
+    )
   ) {
     return NextResponse.next();
   }
 
-  // ----------------------------------------------------------
-  // 2. API requests
-  // API permissions must be checked in their own Route Handlers.
-  // ----------------------------------------------------------
+  /* =====================================================
+     Authentication
+  ===================================================== */
 
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.next();
-  }
+  const authCookie = request.cookies.get("yj_auth");
+  const roleCookie = request.cookies.get("yj_role");
 
-  // ----------------------------------------------------------
-  // 3. Read Firebase Session Cookie
-  // ----------------------------------------------------------
-
-  const sessionCookie = request.cookies.get(
-    SESSION_COOKIE_NAME
-  )?.value;
-
-  if (!sessionCookie) {
+  // Not logged in
+  if (
+    !authCookie ||
+    authCookie.value !== "authenticated"
+  ) {
     return NextResponse.redirect(
       new URL("/login", request.url)
     );
   }
 
-  // ----------------------------------------------------------
-  // 4. Verify Firebase Session
-  // No role checks; any valid signed-in user can access pages.
-  // ----------------------------------------------------------
+  /* =====================================================
+     YJ PO User
+     Only suppliers and purchase orders are allowed
+  ===================================================== */
 
-  try {
-    const { adminAuth } = getFirebaseAdminServices();
-
-    await adminAuth.verifySessionCookie(sessionCookie, false);
-
-    return NextResponse.next();
-  } catch (error) {
-    // Do not log raw credentials or token-related error messages.
-    console.error("[Proxy] Session verification failed", {
-      code:
-        typeof error === "object" && error !== null && "code" in error
-          ? String(error.code)
-          : "unknown",
-    });
-
-    const response = NextResponse.redirect(
-      new URL("/login", request.url)
+  if (roleCookie?.value === "yjpo") {
+    const isAllowed = PO_ALLOWED_PATHS.some(
+      (path) =>
+        pathname === path ||
+        pathname.startsWith(`${path}/`)
     );
 
-    response.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: "",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
-
-    return response;
+    if (!isAllowed) {
+      return NextResponse.redirect(
+        new URL("/purchase-orders", request.url)
+      );
+    }
   }
+
+  /* =====================================================
+     YJ Estimator User
+     Only quote and clients are allowed
+  ===================================================== */
+
+  if (roleCookie?.value === "yjest") {
+    const isAllowed = EST_ALLOWED_PATHS.some(
+      (path) =>
+        pathname === path ||
+        pathname.startsWith(`${path}/`)
+    );
+
+    if (!isAllowed) {
+      return NextResponse.redirect(
+        new URL("/quote", request.url)
+      );
+    }
+  }
+
+  return NextResponse.next();
 }
 
-// ============================================================
-// Proxy matcher
-// ============================================================
+/* =====================================================
+   Proxy Matcher
+
+   Static assets are excluded from proxy completely.
+===================================================== */
 
 export const config = {
   matcher: [
