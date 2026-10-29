@@ -57,28 +57,6 @@ export async function POST(request) {
       maxAge: SESSION_EXPIRES_IN / 1000,
     });
 
-    // Remove legacy cookies. They must no longer be used
-    // as proof of authentication or authorization.
-    response.cookies.set({
-      name: "yj_auth",
-      value: "",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
-
-    response.cookies.set({
-      name: "yj_role",
-      value: "",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 0,
-    });
-
     return response;
   } catch (error) {
     console.error("[Login] Firebase session creation failed:", {
