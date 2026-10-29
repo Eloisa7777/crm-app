@@ -136,13 +136,12 @@ export async function proxy(request: NextRequest) {
   if (
     typeof role !== "string" ||
     !VALID_ROLES.includes(role)
-  ) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { error: "Valid user role required" },
-        { status: 403 }
-      );
-    }
+) {
+  console.error("[Proxy] User role is missing or invalid:", {
+    uid: decodedToken.uid,
+    role: role ?? null,
+    validRoles: VALID_ROLES,
+  });
 
     return redirectToLogin(request);
   }
