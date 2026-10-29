@@ -23,28 +23,53 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 1. 使用 Firebase Authentication 验证账号密码
+      // 1. Authenticate using Firebase email and password.
       const credential = await signInWithEmailAndPassword(
         auth,
         email.trim(),
         password
       );
 
-      // 2. 获取最新的 Firebase ID Token
+      // 2. Force refresh the ID Token so updated Custom Claims
+      //    can be included.
       const idToken = await credential.user.getIdToken(true);
 
-      // 3. 暂存为后续服务端 Session 接入的接口
-      // 这里暂时只完成 Firebase 客户端登录。
-      // 服务端 Session 尚未建立，因此不要把此版本
-      // 当作完整的 CRM 生产环境权限保护方案。
-      if (!idToken) {
-        throw new Error("无法获取 Firebase 登录令牌");
+      // 3. Exchange the ID Token for an HttpOnly session cookie.
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Failed to create login session"
+        );
       }
 
+      // 4. Clear the client-side Firebase sign-in state.
+      //    The server-side __session cookie remains available.
+      try {
+        await signOut(auth);
+      } catch (signOutError) {
+        console.warn(
+          "[Login] Client sign-out failed:",
+          signOutError
+        );
+      }
+
+      // 5. Navigate to CRM.
       router.replace("/");
       router.refresh();
     } catch (err) {
-      console.error("[Login] Firebase sign-in failed:", err);
+      console.error("[Login] Sign-in failed:", {
+        code: err?.code,
+        message: err?.message,
+      });
 
       const messages = {
         "auth/invalid-credential": "邮箱或密码不正确",
@@ -55,8 +80,9 @@ export default function LoginPage() {
       };
 
       setError(
-        messages[err.code] ||
-        "登录失败，请检查 Firebase 配置和账号状态"
+        messages[err?.code] ||
+          err?.message ||
+          "登录失败，请检查 Firebase 配置和账号状态"
       );
     } finally {
       setLoading(false);

@@ -1,12 +1,20 @@
 
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
+
+// ============================================================
+// 1. Public routes
+// ============================================================
 
 const PUBLIC_PATHS = [
   "/login",
   "/api/login",
   "/api/logout",
 ];
+
+// ============================================================
+// 2. Page permissions
+// ============================================================
 
 const PO_ALLOWED_PATHS = [
   "/purchase-orders",
@@ -16,91 +24,172 @@ const PO_ALLOWED_PATHS = [
 
 const EST_ALLOWED_PATHS = [
   "/quote",
+  "/clients",
 ];
 
-export function proxy(request: NextRequest) {
+const VALID_ROLES = ["admin", "yjpo", "yjest"];
+
+const SESSION_COOKIE_NAME = "__session";
+
+// ============================================================
+// 3. Helpers
+// ============================================================
+
+function matchesPath(pathname: string, allowedPaths: string[]) {
+  return allowedPaths.some(
+    (path) =>
+      pathname === path || pathname.startsWith(`${path}/`)
+  );
+}
+
+function redirectToLogin(request: NextRequest) {
+  const response = NextResponse.redirect(
+    new URL("/login", request.url)
+  );
+
+  // Clear invalid or expired sessions.
+  response.cookies.set({
+    name: SESSION_COOKIE_NAME,
+    value: "",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+
+  // Remove legacy authentication cookies.
+  response.cookies.set({
+    name: "yj_auth",
+    value: "",
+    path: "/",
+    maxAge: 0,
+  });
+
+  response.cookies.set({
+    name: "yj_role",
+    value: "",
+    path: "/",
+    maxAge: 0,
+  });
+
+  return response;
+}
+
+// ============================================================
+// 4. Main Proxy
+// ============================================================
+
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  /* =====================================================
-     Public pages / APIs / static assets
-  ===================================================== */
-
-  if (
-    pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico" ||
-    pathname === "/logo.png" ||
-    PUBLIC_PATHS.some(
-      (path) =>
-        pathname === path ||
-        pathname.startsWith(`${path}/`)
-    )
-  ) {
+  // Allow public pages and authentication endpoints.
+  if (matchesPath(pathname, PUBLIC_PATHS)) {
     return NextResponse.next();
   }
 
-  /* =====================================================
-     Authentication
-  ===================================================== */
+  // The matcher below excludes static assets.
+  // Check Firebase session instead of trusting old cookies.
+  const sessionCookie =
+    request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
-  const authCookie = request.cookies.get("yj_auth");
-  const roleCookie = request.cookies.get("yj_role");
+  if (!sessionCookie) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
 
-  // Not logged in
+    return redirectToLogin(request);
+  }
+
+  let decodedToken;
+
+  try {
+    const { adminAuth } = getFirebaseAdminServices();
+
+    // Verify the signature, expiry and revocation status.
+    decodedToken = await adminAuth.verifySessionCookie(
+      sessionCookie,
+      true
+    );
+  } catch (error) {
+    console.error("[Proxy] Session verification failed:", {
+      code: (error as { code?: string })?.code,
+      message: (error as { message?: string })?.message,
+    });
+
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "Invalid or expired session" },
+        { status: 401 }
+      );
+    }
+
+    return redirectToLogin(request);
+  }
+
+  // Read role from the verified Firebase token.
+  const role = decodedToken.role;
+
   if (
-    !authCookie ||
-    authCookie.value !== "authenticated"
+    typeof role !== "string" ||
+    !VALID_ROLES.includes(role)
+  ) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "Valid user role required" },
+        { status: 403 }
+      );
+    }
+
+    return redirectToLogin(request);
+  }
+
+  // ==========================================================
+  // 5. API routes
+  // ==========================================================
+  // This verifies the session only.
+  // Each protected API handler must also enforce role permissions.
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
+  // ==========================================================
+  // 6. YJ PO role
+  // ==========================================================
+
+  if (
+    role === "yjpo" &&
+    !matchesPath(pathname, PO_ALLOWED_PATHS)
   ) {
     return NextResponse.redirect(
-      new URL("/login", request.url)
+      new URL("/purchase-orders", request.url)
     );
   }
 
-  /* =====================================================
-     YJ PO User
-     Only suppliers and purchase orders are allowed
-  ===================================================== */
+  // ==========================================================
+  // 7. YJ Estimator role
+  // ==========================================================
 
-  if (roleCookie?.value === "yjpo") {
-    const isAllowed = PO_ALLOWED_PATHS.some(
-      (path) =>
-        pathname === path ||
-        pathname.startsWith(`${path}/`)
+  if (
+    role === "yjest" &&
+    !matchesPath(pathname, EST_ALLOWED_PATHS)
+  ) {
+    return NextResponse.redirect(
+      new URL("/quote", request.url)
     );
-
-    if (!isAllowed) {
-      return NextResponse.redirect(
-        new URL("/purchase-orders", request.url)
-      );
-    }
   }
 
-  /* =====================================================
-     YJ Estimator User
-     Only quote and clients are allowed
-  ===================================================== */
-
-  if (roleCookie?.value === "yjest") {
-    const isAllowed = EST_ALLOWED_PATHS.some(
-      (path) =>
-        pathname === path ||
-        pathname.startsWith(`${path}/`)
-    );
-
-    if (!isAllowed) {
-      return NextResponse.redirect(
-        new URL("/quote", request.url)
-      );
-    }
-  }
-
+  // Admin can access all authenticated pages.
   return NextResponse.next();
 }
 
-/* =====================================================
-   Proxy Matcher
-
-   Static assets are excluded from proxy completely.
-===================================================== */
+// ============================================================
+// 8. Proxy matcher
+// ============================================================
 
 export const config = {
   matcher: [
