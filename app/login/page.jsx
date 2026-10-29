@@ -2,7 +2,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   signInWithEmailAndPassword,
   signOut,
@@ -10,8 +9,6 @@ import {
 import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -19,52 +16,57 @@ export default function LoginPage() {
 
   async function handleLogin(e) {
     e.preventDefault();
+
+    if (loading) return;
+
     setError("");
     setLoading(true);
 
     try {
-      // 1. Authenticate using Firebase email and password.
+      // 1. Sign in with Firebase Authentication.
       const credential = await signInWithEmailAndPassword(
         auth,
         email.trim(),
         password
       );
 
-      // 2. Force refresh the ID Token so updated Custom Claims
-      //    can be included.
+      // 2. Get a fresh Firebase ID token.
       const idToken = await credential.user.getIdToken(true);
 
-      // 3. Exchange the ID Token for an HttpOnly session cookie.
+      // 3. Exchange the ID token for a server session cookie.
       const response = await fetch("/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "same-origin",
         body: JSON.stringify({ idToken }),
       });
 
       const result = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok || result.success !== true) {
         throw new Error(
           result.error || "Failed to create login session"
         );
       }
 
-      // 4. Clear the client-side Firebase sign-in state.
-      //    The server-side __session cookie remains available.
+      console.info("[Login] Server session created successfully.");
+
+      // 4. Clear the client-side Firebase Auth state.
+      //    This should not clear the server's HttpOnly session cookie.
       try {
         await signOut(auth);
       } catch (signOutError) {
         console.warn(
           "[Login] Client sign-out failed:",
-          signOutError
+          signOutError?.code || signOutError?.message
         );
       }
 
-      // 5. Navigate to CRM.
-      router.replace("/");
-      router.refresh();
+      // 5. Perform a full browser navigation.
+      //    This also reruns the server-side proxy/middleware checks.
+      window.location.replace("/");
     } catch (err) {
       console.error("[Login] Sign-in failed:", {
         code: err?.code,
@@ -82,9 +84,9 @@ export default function LoginPage() {
       setError(
         messages[err?.code] ||
           err?.message ||
-          "登录失败，请检查 Firebase 配置和账号状态"
+          "登录失败，请检查服务器日志"
       );
-    } finally {
+
       setLoading(false);
     }
   }
