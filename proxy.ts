@@ -4,11 +4,10 @@ import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 // ============================================================
 // CRM Proxy
-// 1. 验证 Firebase Session Cookie
-// 2. 从已验证的 Session 读取角色
-// 3. 限制不同角色的页面访问
-//
-// 注意：API 仍必须在各自的服务端 Route Handler 中验证权限。
+// 1. 放行登录页面和公开资源
+// 2. API 由各自的 Route Handler 独立验证
+// 3. 其他页面只验证 Firebase Session Cookie
+// 4. 暂时不限制用户角色
 // ============================================================
 
 const SESSION_COOKIE_NAME = "yj_session";
@@ -19,25 +18,8 @@ const PUBLIC_PATHS = [
   "/api/logout",
 ];
 
-const PO_ALLOWED_PATHS = [
-  "/purchase-orders",
-  "/suppliers",
-  "/subcontractors",
-];
-
-const EST_ALLOWED_PATHS = [
-  "/quote",
-  "/clients",
-];
-
-const ALLOWED_ROLES = new Set([
-  "admin",
-  "yjpo",
-  "yjest",
-]);
-
-function matchesPath(pathname: string, allowedPaths: string[]) {
-  return allowedPaths.some(
+function matchesPath(pathname: string, paths: string[]) {
+  return paths.some(
     (path) =>
       pathname === path ||
       pathname.startsWith(`${path}/`)
@@ -47,10 +29,7 @@ function matchesPath(pathname: string, allowedPaths: string[]) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ----------------------------------------------------------
-  // 1. Public pages and APIs
-  // ----------------------------------------------------------
-
+  // 1. Public pages and static resources
   if (
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
@@ -60,19 +39,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ----------------------------------------------------------
-  // 2. API requests must verify Session in their own handlers.
-  // Do not redirect API clients to an HTML login page.
-  // ----------------------------------------------------------
-
+  // 2. API endpoints must perform their own authentication.
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 
-  // ----------------------------------------------------------
-  // 3. Read Firebase Session Cookie
-  // ----------------------------------------------------------
-
+  // 3. Read the Firebase Session Cookie.
   const sessionCookie = request.cookies.get(
     SESSION_COOKIE_NAME
   )?.value;
@@ -83,32 +55,22 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  // ----------------------------------------------------------
-  // 4. Verify Session and read trusted role claims
-  // ----------------------------------------------------------
-
-  let role: string;
-
+  // 4. Verify Session only. No role checks for now.
   try {
     const { adminAuth } = getFirebaseAdminServices();
 
-    // Verify the Firebase Session signature, expiry and claims.
-    // Revocation is checked separately by sensitive server APIs.
-    const decoded = await adminAuth.verifySessionCookie(
+    await adminAuth.verifySessionCookie(
       sessionCookie,
       false
     );
 
-    if (
-      typeof decoded.role !== "string" ||
-      !ALLOWED_ROLES.has(decoded.role)
-    ) {
-      throw new Error("UNAUTHORIZED_CRM_ROLE");
-    }
-
-    role = decoded.role;
+    return NextResponse.next();
   } catch (error) {
     console.error("[Proxy] Session verification failed", {
+      code:
+        error instanceof Error && "code" in error
+          ? String(error.code)
+          : "unknown",
       message:
         error instanceof Error
           ? error.message
@@ -123,7 +85,9 @@ export async function proxy(request: NextRequest) {
       name: SESSION_COOKIE_NAME,
       value: "",
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure:
+        process.env.NODE_ENV === "production" ||
+        process.env.VERCEL === "1",
       sameSite: "lax",
       path: "/",
       maxAge: 0,
@@ -131,29 +95,6 @@ export async function proxy(request: NextRequest) {
 
     return response;
   }
-
-  // ----------------------------------------------------------
-  // 5. Role-based page access
-  // ----------------------------------------------------------
-
-  if (role === "yjpo") {
-    if (!matchesPath(pathname, PO_ALLOWED_PATHS)) {
-      return NextResponse.redirect(
-        new URL("/purchase-orders", request.url)
-      );
-    }
-  }
-
-  if (role === "yjest") {
-    if (!matchesPath(pathname, EST_ALLOWED_PATHS)) {
-      return NextResponse.redirect(
-        new URL("/quote", request.url)
-      );
-    }
-  }
-
-  // admin can access all matched pages.
-  return NextResponse.next();
 }
 
 // ============================================================
