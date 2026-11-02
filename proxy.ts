@@ -10,7 +10,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/api/login",
   "/api/logout",
-   "/api/admin/set-test-role",
+  "/api/admin/set-test-role",
 ];
 
 // ============================================================
@@ -28,9 +28,18 @@ const EST_ALLOWED_PATHS = [
   "/clients",
 ];
 
-const VALID_ROLES = ["admin", "yjpo", "yjest"];
+const SUBSUP_ALLOWED_PATHS = [
+  "/sub-invoices",
+];
 
-const SESSION_COOKIE_NAME = "__session";
+const VALID_ROLES = [
+  "admin",
+  "yjpo",
+  "yjest",
+  "subsup",
+];
+
+const SESSION_COOKIE_NAME = "yj_session";
 
 // ============================================================
 // 3. Helpers
@@ -48,7 +57,7 @@ function redirectToLogin(request: NextRequest) {
     new URL("/login", request.url)
   );
 
-  // Clear invalid or expired sessions.
+  // Clear invalid or expired session.
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: "",
@@ -84,13 +93,12 @@ function redirectToLogin(request: NextRequest) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public pages and authentication endpoints.
+  // Allow public routes.
   if (matchesPath(pathname, PUBLIC_PATHS)) {
     return NextResponse.next();
   }
 
-  // The matcher below excludes static assets.
-  // Check Firebase session instead of trusting old cookies.
+  // Read Firebase session.
   const sessionCookie =
     request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
@@ -110,7 +118,7 @@ export async function proxy(request: NextRequest) {
   try {
     const { adminAuth } = getFirebaseAdminServices();
 
-    // Verify the signature, expiry and revocation status.
+    // Verify signature, expiry and revocation.
     decodedToken = await adminAuth.verifySessionCookie(
       sessionCookie,
       true
@@ -131,18 +139,17 @@ export async function proxy(request: NextRequest) {
     return redirectToLogin(request);
   }
 
-  // Read role from the verified Firebase token.
+  // Read role from verified Firebase token.
   const role = decodedToken.role;
 
   if (
     typeof role !== "string" ||
     !VALID_ROLES.includes(role)
-) {
-  console.error("[Proxy] User role is missing or invalid:", {
-    uid: decodedToken.uid,
-    role: role ?? null,
-    validRoles: VALID_ROLES,
-  });
+  ) {
+    console.error("[Proxy] Invalid CRM role:", {
+      uid: decodedToken.uid,
+      role: role ?? null,
+    });
 
     return redirectToLogin(request);
   }
@@ -150,9 +157,9 @@ export async function proxy(request: NextRequest) {
   // ==========================================================
   // 5. API routes
   // ==========================================================
-  // This verifies the session only.
-  // Each protected API handler must also enforce role permissions.
 
+  // Proxy verifies authentication only.
+  // Each API handler must enforce its own role permissions.
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
@@ -183,12 +190,25 @@ export async function proxy(request: NextRequest) {
     );
   }
 
+  // ==========================================================
+  // 8. Subcontractor / Supplier role
+  // ==========================================================
+
+  if (
+    role === "subsup" &&
+    !matchesPath(pathname, SUBSUP_ALLOWED_PATHS)
+  ) {
+    return NextResponse.redirect(
+      new URL("/sub-invoices", request.url)
+    );
+  }
+
   // Admin can access all authenticated pages.
   return NextResponse.next();
 }
 
 // ============================================================
-// 8. Proxy matcher
+// 9. Proxy matcher
 // ============================================================
 
 export const config = {

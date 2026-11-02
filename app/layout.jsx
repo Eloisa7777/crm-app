@@ -9,18 +9,24 @@ export const metadata = {
   description: "YJ Management System",
 };
 
-const VALID_ROLES = ["admin", "yjpo", "yjest"];
+// All valid CRM roles.
+const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup"];
+
+// Must match login API and proxy.
+const SESSION_COOKIE_NAME = "yj_session";
 
 export default async function RootLayout({ children }) {
   const cookieStore = await cookies();
 
-  // Use the same session cookie as proxy.ts.
-  const sessionCookie = cookieStore.get("__session")?.value;
+  // Read the unified CRM session cookie.
+  const sessionCookie = cookieStore.get(
+    SESSION_COOKIE_NAME
+  )?.value;
 
   let isAuthenticated = false;
   let role = null;
 
-  // Verify the server session and read the role from Firebase.
+  // Verify Firebase session and read custom claims.
   if (sessionCookie) {
     try {
       const { adminAuth } = getFirebaseAdminServices();

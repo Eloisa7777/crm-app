@@ -1,11 +1,17 @@
+
 import { NextResponse } from "next/server";
 import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
 
+// Session expires after 5 days.
 const SESSION_EXPIRES_IN = 5 * 24 * 60 * 60 * 1000;
 
-const VALID_ROLES = ["admin", "yjpo", "yjest"];
+// All valid CRM roles.
+const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup"];
+
+// Unified CRM session cookie name.
+const SESSION_COOKIE_NAME = "yj_session";
 
 export async function POST(request) {
   try {
@@ -19,32 +25,23 @@ export async function POST(request) {
       );
     }
 
-    // ========================================================
-    // 1. Initialize Firebase Admin
-    // ========================================================
-
+    // 1. Initialize Firebase Admin.
     const { adminAuth } = getFirebaseAdminServices();
 
-    // ========================================================
-    // 2. Verify Firebase ID Token
-    // ========================================================
-
+    // 2. Verify Firebase ID token.
     const decodedToken = await adminAuth.verifyIdToken(
       idToken,
       true
     );
 
-    // ========================================================
-    // 3. Validate Firebase Custom Claims
-    // ========================================================
-
+    // 3. Validate Firebase custom claims.
     const role = decodedToken.role;
 
     if (
       typeof role !== "string" ||
       !VALID_ROLES.includes(role)
     ) {
-      console.warn("[Login] Account has no valid CRM role:", {
+      console.warn("[Login] Invalid CRM role:", {
         uid: decodedToken.uid,
         role: role ?? null,
       });
@@ -58,10 +55,7 @@ export async function POST(request) {
       );
     }
 
-    // ========================================================
-    // 4. Create Firebase Session Cookie
-    // ========================================================
-
+    // 4. Create Firebase session cookie.
     const sessionCookie = await adminAuth.createSessionCookie(
       idToken,
       {
@@ -69,10 +63,7 @@ export async function POST(request) {
       }
     );
 
-    // ========================================================
-    // 5. Set Session Cookie
-    // ========================================================
-
+    // 5. Return login result and set session cookie.
     const response = NextResponse.json({
       success: true,
       uid: decodedToken.uid,
@@ -80,7 +71,7 @@ export async function POST(request) {
     });
 
     response.cookies.set({
-      name: "__session",
+      name: SESSION_COOKIE_NAME,
       value: sessionCookie,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -89,9 +80,9 @@ export async function POST(request) {
       maxAge: SESSION_EXPIRES_IN / 1000,
     });
 
-    // Remove legacy session cookie.
+    // Remove old __session cookie.
     response.cookies.set({
-      name: "yj_session",
+      name: "__session",
       value: "",
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -106,6 +97,7 @@ export async function POST(request) {
     });
 
     return response;
+
   } catch (error) {
     console.error("[Login] Firebase session creation failed:", {
       code: error?.code,

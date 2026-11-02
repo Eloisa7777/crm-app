@@ -542,6 +542,8 @@ export default function NewSubInvoicePage() {
         throw new Error("You must be logged in to create an invoice.");
       }
 
+      const currentUID = currentUser.uid;
+
       // Re-check the PO from Firestore before saving
       const latestPORef = doc(
         db,
@@ -593,6 +595,7 @@ export default function NewSubInvoicePage() {
       }
 
       const invoiceData = {
+        uid: currentUID,
         invoiceType: "sub-invoice",
         invoiceNumber: form.invoiceNumber.trim(),
         invoiceDate: form.invoiceDate,
