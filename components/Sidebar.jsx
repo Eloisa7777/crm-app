@@ -1,81 +1,38 @@
+
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 const menuItems = [
-  {
-    name: "Dashboard",
-    href: "/",
-    icon: "▦",
-  },
-    {
-    name: "Quote",
-    href: "/quote",
-    icon: "▣",
-  },
-  {
-    name: "Projects",
-    href: "/projects",
-    icon: "▣",
-  },
-  {
-    name: "Suppliers",
-    href: "/suppliers",
-    icon: "♙",
-  },
-    {
-    name: "Subcontractors",
-    href: "/subcontractors",
-    icon: "♙",
-  },
-  {
-    name: "Clients",
-    href: "/clients",
-    icon: "♙",
-  },
-  {
-    name: "Purchase Orders",
-    href: "/purchase-orders",
-    icon: "□",
-  },
-  {
-    name: "Bills",
-    href: "/bills",
-    icon: "□",
-  },
-  {
-    name: "Invoices",
-    href: "/invoices",
-    icon: "▤",
-  },
-    {
-    name: "Sub-Invoices",
-    href: "/sub-invoices",
-    icon: "▤",
-  },
+  { name: "Dashboard", href: "/", icon: "▦" },
+  { name: "Quote", href: "/quote", icon: "▣" },
+  { name: "Projects", href: "/projects", icon: "▣" },
+  { name: "Suppliers", href: "/suppliers", icon: "♙" },
+  { name: "Subcontractors", href: "/subcontractors", icon: "♙" },
+  { name: "Clients", href: "/clients", icon: "♙" },
+  { name: "Purchase Orders", href: "/purchase-orders", icon: "□" },
+  { name: "Bills", href: "/bills", icon: "□" },
+  { name: "Invoices", href: "/invoices", icon: "▤" },
+  { name: "Subcontractor Invoices", href: "/sub-invoices", icon: "▤" },
 ];
 
-export default function Sidebar({ role }) {
+export default function Sidebar() {
   const pathname = usePathname();
 
-  const isPOUser = role === "yjpo";
-  const isESTUser = role === "yjest";
+  // Firebase current user UID
+  const [uid, setUid] = useState("");
 
-  // yjpo can only access suppliers and purchase orders
-  const visibleMenuItems = isPOUser
-    ? menuItems.filter(
-        (item) =>
-          item.href === "/suppliers" ||
-          item.href === "/subcontractors" ||
-          item.href === "/purchase-orders"
-      )
-      : isESTUser
-      ? menuItems.filter(
-          (item) =>
-            item.href === "/quote"
-        )
-    : menuItems;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUid(user?.uid || "");
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
     <aside className="w-64 bg-indigo-800 border-r border-gray-200 min-h-screen flex flex-col shrink-0">
@@ -88,9 +45,7 @@ export default function Sidebar({ role }) {
         </div>
 
         <div className="space-y-1">
-
-          {visibleMenuItems.map((item) => {
-
+          {menuItems.map((item) => {
             const active =
               item.href === "/"
                 ? pathname === "/"
@@ -113,51 +68,56 @@ export default function Sidebar({ role }) {
                   }
                 `}
               >
-
                 <span className="w-5 text-center text-base">
                   {item.icon}
                 </span>
 
-                <span>
-                  {item.name}
-                </span>
+                <span>{item.name}</span>
               </Link>
             );
           })}
         </div>
       </nav>
-  
-        <div className="flex items-center gap-3 mb-4 px-6 ">
+
+      {/* Logout */}
+      <div className="flex items-center gap-3 mb-4 px-6">
         <Link
           href="/login"
-          className=" rounded-lg bg-indigo-800 px-5 py-2.5 border border-gray-200 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+          className="rounded-lg bg-indigo-800 px-5 py-2.5 border border-gray-200 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
         >
           Logout
         </Link>
+      </div>
 
-        </div>
-
-      {/* User */}
+      {/* User Information */}
       <div className="p-4 border-t border-gray-200">
-
         <div className="flex items-center gap-3">
 
-          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold">
-            {isPOUser ? "PO" : isESTUser ? "EST" : "YJ"}
+          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold text-indigo-800 shrink-0">
+            YJ
           </div>
 
-          <div className="min-w-0">
-
+          <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-white truncate">
-              {isPOUser ? "YJ PO" : isESTUser ? "YJ Estimator" : "YJ Building"}
+              YJ Building
             </div>
 
             <div className="text-xs text-gray-400 truncate">
-              {isPOUser ? "Purchase Orders" : isESTUser ? "Quote Management" : "Administration"}
+              Administration
             </div>
-
           </div>
 
+        </div>
+
+        {/* Firebase UID */}
+        <div className="mt-4 pt-3 border-t border-indigo-600">
+          <div className="text-xs font-semibold text-gray-400 mb-2">
+            Firebase User UID
+          </div>
+
+          <div className="text-xs text-amber-300 break-all select-all leading-relaxed">
+            {uid || "Not signed in"}
+          </div>
         </div>
 
       </div>

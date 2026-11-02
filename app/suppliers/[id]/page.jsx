@@ -32,15 +32,17 @@ export default function SupplierDetailsPage() {
   const [saved, setSaved] = useState(false);
 
   // Edit form
-  const [form, setForm] = useState({
-    name: "",
-    abn: "",
-    contact: "",
-    email: "",
-    phone: "",
-    address: "",
-    status: "Active",
-  });
+const [form, setForm] = useState({
+  name: "",
+  short:"",
+  uid: "", // Optional Firebase Authentication UID
+  abn: "",
+  contact: "",
+  email: "",
+  phone: "",
+  address: "",
+  status: "Active",
+});
 
   /* =====================================================
      Load Supplier
@@ -76,6 +78,8 @@ export default function SupplierDetailsPage() {
 
         setForm({
           name: data.name || "",
+          short: data.short || "",
+          uid: data.uid || "",
           abn: data.abn || "",
           contact: data.contact || "",
           email: data.email || "",
@@ -189,6 +193,8 @@ export default function SupplierDetailsPage() {
 
       const updatedData = {
         name: form.name.trim(),
+        short: form.short.trim(),
+        uid: form.uid.trim(),
         abn: form.abn.trim(),
         contact: form.contact.trim(),
         email: form.email.trim(),
@@ -237,6 +243,8 @@ export default function SupplierDetailsPage() {
   function handleCancelEdit() {
     setForm({
       name: supplier.name || "",
+      short: supplier.short || "",
+      uid: supplier.uid || "",
       abn: supplier.abn || "",
       contact: supplier.contact || "",
       email: supplier.email || "",
@@ -415,7 +423,7 @@ export default function SupplierDetailsPage() {
             </h1>
 
             <p className="text-sm text-gray-500 mt-1">
-              Supplier details
+              Contact details
             </p>
 
           </div>
@@ -530,6 +538,20 @@ export default function SupplierDetailsPage() {
                   />
 
                   <EditField
+                    label="Short Name (for invoice number)"
+                    value={form.short}
+                    onChange={(value) =>
+                      updateForm("short", value)
+                    }
+                  />
+
+                  <EditField
+                    label="Firebase Authentication UID (Optional)"
+                    value={form.uid}
+                    onChange={(value) => updateForm("uid", value)}
+                  />
+
+                  <EditField
                     label="ABN"
                     value={form.abn}
                     onChange={(value) =>
@@ -618,6 +640,16 @@ export default function SupplierDetailsPage() {
                   <InfoItem
                     label="Supplier Name"
                     value={supplier.name}
+                  />
+
+                  <InfoItem
+                    label="Short Name"
+                    value={supplier.short}
+                  />
+
+                  <InfoItem
+                    label="Firebase Authentication UID (Optional)"
+                    value={supplier.uid}
                   />
 
                   <InfoItem

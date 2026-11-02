@@ -34,6 +34,8 @@ export default function SubcontractorDetailsPage() {
   // Edit form
   const [form, setForm] = useState({
     name: "",
+    short: "", // Optional short name for the subcontractor
+    uid: "", // Optional Firebase Authentication UID
     abn: "",
     contact: "",
     email: "",
@@ -76,6 +78,8 @@ export default function SubcontractorDetailsPage() {
 
         setForm({
           name: data.name || "",
+          short: data.short || "",
+          uid: data.uid || "",
           abn: data.abn || "",
           contact: data.contact || "",
           email: data.email || "",
@@ -189,6 +193,8 @@ export default function SubcontractorDetailsPage() {
 
       const updatedData = {
         name: form.name.trim(),
+        short: form.short.trim(),
+        uid: form.uid.trim(),
         abn: form.abn.trim(),
         contact: form.contact.trim(),
         email: form.email.trim(),
@@ -237,6 +243,8 @@ export default function SubcontractorDetailsPage() {
   function handleCancelEdit() {
     setForm({
       name: subcontractor.name || "",
+      short: subcontractor.short || "",
+      uid: subcontractor.uid || "",
       abn: subcontractor.abn || "",
       contact: subcontractor.contact || "",
       email: subcontractor.email || "",
@@ -530,6 +538,20 @@ export default function SubcontractorDetailsPage() {
                   />
 
                   <EditField
+                    label="Short Name (For invoice number)"
+                    value={form.short}
+                    onChange={(value) =>
+                      updateForm("short", value)
+                    }
+                  />
+
+                  <EditField
+                    label="Firebase Authentication UID (Optional)"
+                    value={form.uid}
+                    onChange={(value) => updateForm("uid", value)}
+                  />
+
+                  <EditField
                     label="ABN"
                     value={form.abn}
                     onChange={(value) =>
@@ -618,6 +640,16 @@ export default function SubcontractorDetailsPage() {
                   <InfoItem
                     label="Subcontractor Name"
                     value={subcontractor.name}
+                  />
+
+                  <InfoItem
+                    label="Short Name (For invoice number)"
+                    value={subcontractor.short}
+                  />
+
+                  <InfoItem
+                    label="Firebase Authentication UID (Optional)"
+                    value={subcontractor.uid}
                   />
 
                   <InfoItem

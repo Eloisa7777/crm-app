@@ -3,9 +3,8 @@
 
 // ============================================================
 // Sub-Invoice - Create Page
-// Uses the same invoice fields and calculations as the existing
-// Invoice page, but does not collect Client or Project information.
-// Saves to Firestore collection: subInvoices
+// PO 自动填充 + Supplier / Subcontractor 自动匹配
+// All invoice details can be edited before saving.
 // ============================================================
 
 import Link from "next/link";
@@ -13,18 +12,50 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
+  doc,
+  getDoc,
   getDocs,
   serverTimestamp,
 } from "firebase/firestore";
+
+import {
+  getAuth,
+  onAuthStateChanged,
+} from "firebase/auth";
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 
 import { db } from "@/lib/firebase";
-import InvoicePDF from "@/components/InvoicePDF";
+import SubinvoicePDF from "@/components/SubinvoicePDF";
 
-const DEFAULT_ACCOUNT_MANAGER = "Leo";
-const DEFAULT_ACCOUNT_MANAGER_EMAIL = "leo.l@yjliningscreation.com.au";
+// ============================================================
+// 1. Helpers
+// ============================================================
 
-const today = () => new Date().toISOString().split("T")[0];
+function localDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDate(dateString, days = 20) {
+  if (!dateString) return "";
+
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+
+  return localDate(date);
+}
+
+function generateInvoiceNumber(short, dateString) {
+  if (!short || !dateString) return "";
+
+  const [year, month, day] = dateString.split("-");
+  const shortDate = `${day}${month}${year.slice(-2)}`;
+
+  return `INV-${String(short).trim()}${shortDate}`;
+}
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-AU", {
@@ -32,48 +63,107 @@ const money = (value) =>
     maximumFractionDigits: 2,
   });
 
+const EMPTY_SUPPLIER = {
+  name: "",
+  short: "",
+  abn: "",
+  address: "",
+  contact: "",
+  email: "",
+  phone: "",
+  bankName: "",
+  bankAccount: "",
+  BSB: "",
+};
+
+// ============================================================
+// 2. Component
+// ============================================================
+
 export default function NewSubInvoicePage() {
-  // ==========================================================
-  // 1. Form state - no Client or Project fields
-  // ==========================================================
+  const initialDate = localDate();
+
   const [form, setForm] = useState({
     invoiceNumber: "",
-    invoiceDate: today(),
-    dueDate: "",
+    invoiceDate: initialDate,
+    dueDate: addDaysToDate(initialDate, 20),
     status: "Draft",
     poNumber: "",
+    purchaseOrderId: "",
+    projectId: "",
+    projectName: "",
+    siteAddress: "",
+    scopeOfWork: "",
     notes: "",
-    accountManager: DEFAULT_ACCOUNT_MANAGER,
-    accountManagerEmail: DEFAULT_ACCOUNT_MANAGER_EMAIL,
   });
 
-  // ==========================================================
-  // 2. Invoice items
-  // ==========================================================
   const [items, setItems] = useState([
     { description: "", qty: 1, unitPrice: "", tax: 0 },
   ]);
 
-  // ==========================================================
-  // 2A. Load PO Numbers from Firestore
-  // Collection: purchaseOrders
-  // ==========================================================
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [loadingPOs, setLoadingPOs] = useState(true);
   const [poLoadError, setPoLoadError] = useState("");
 
+  const [supplier, setSupplier] = useState(EMPTY_SUPPLIER);
+  const [loadingSupplier, setLoadingSupplier] = useState(false);
+  const [supplierLoadError, setSupplierLoadError] = useState("");
+
+  const [saving, setSaving] = useState(false);
+  const [savedInvoice, setSavedInvoice] = useState(null);
+  const [error, setError] = useState("");
+
+  // ==========================================================
+  // 3. Load Purchase Orders
+  // Only load the logged-in user's Issued POs.
+  // ==========================================================
+
   useEffect(() => {
     let active = true;
+    let unsubscribe = null;
 
-    async function loadPurchaseOrders() {
+    async function loadPurchaseOrders(currentUser) {
       try {
         setLoadingPOs(true);
         setPoLoadError("");
+        setPurchaseOrders([]);
 
-        const snapshot = await getDocs(collection(db, "purchaseOrders"));
-        const orders = snapshot.docs
-          .map((doc) => {
-            const data = doc.data();
+        if (!currentUser) {
+          throw new Error("Please log in to view Purchase Orders.");
+        }
+
+        const currentUID = currentUser.UID || currentUser.uid;
+
+        const [
+          suppliersSnapshot,
+          subcontractorsSnapshot,
+          poSnapshot,
+        ] = await Promise.all([
+          getDocs(collection(db, "Suppliers")),
+          getDocs(collection(db, "Subcontractors")),
+          getDocs(collection(db, "purchaseOrders")),
+        ]);
+
+        if (!active) return;
+
+        // Supplier documents belonging to current user
+        const supplierIds = new Set(
+          suppliersSnapshot.docs
+            .filter((item) => item.data().uid === currentUID)
+            .map((item) => item.id)
+        );
+
+        // Subcontractor documents belonging to current user
+        const subcontractorIds = new Set(
+          subcontractorsSnapshot.docs
+            .filter((item) => item.data().uid === currentUID)
+            .map((item) => item.id)
+        );
+
+        const orders = poSnapshot.docs
+          .map((item) => {
+            const data = item.data();
+
             const poNumber =
               data.poNumber ||
               data.purchaseOrderNumber ||
@@ -82,33 +172,298 @@ export default function NewSubInvoicePage() {
               "";
 
             return {
-              id: doc.id,
+              id: item.id,
               ...data,
               poNumber: String(poNumber).trim(),
             };
           })
-          .filter((order) => order.poNumber)
-          .sort((a, b) => a.poNumber.localeCompare(b.poNumber));
+          .filter((order) => {
+            // Only Issued POs
+            if (order.status !== "Issued") return false;
 
-        if (active) setPurchaseOrders(orders);
+            if (!order.supplierId || !order.poNumber) return false;
+
+            // Match Supplier UID
+            if (order.supplierType === "Supplier") {
+              return supplierIds.has(order.supplierId);
+            }
+
+            // Match Subcontractor UID
+            if (order.supplierType === "Subcontractor") {
+              return subcontractorIds.has(order.supplierId);
+            }
+
+            return false;
+          })
+          .sort((a, b) =>
+            a.poNumber.localeCompare(b.poNumber)
+          );
+
+        if (active) {
+          setPurchaseOrders(orders);
+        }
       } catch (err) {
-        console.error("Failed to load purchase orders:", err);
-        if (active) setPoLoadError("Failed to load PO Numbers from Firebase.");
+        console.error("Failed to load Purchase Orders:", err);
+
+        if (active) {
+          setPoLoadError(
+            err.message || "Failed to load Purchase Orders."
+          );
+        }
       } finally {
-        if (active) setLoadingPOs(false);
+        if (active) {
+          setLoadingPOs(false);
+        }
       }
     }
 
-    loadPurchaseOrders();
+    // Wait for Firebase Auth to restore the login session
+    unsubscribe = onAuthStateChanged(getAuth(), (user) => {
+      if (user) {
+        loadPurchaseOrders(user);
+      } else {
+        setPurchaseOrders([]);
+        setLoadingPOs(false);
+        setPoLoadError("Please log in to view Purchase Orders.");
+      }
+    });
 
     return () => {
       active = false;
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 
   const selectedPurchaseOrder = purchaseOrders.find(
-    (order) => order.poNumber === form.poNumber
+    (order) => order.id === form.purchaseOrderId
   );
+
+    // ==========================================================
+  // 4. Load Supplier / Subcontractor from selected PO
+  // ==========================================================
+
+  async function loadSupplierForPO(order) {
+    if (!order) {
+      setSupplier(EMPTY_SUPPLIER);
+      setSupplierLoadError("");
+      return;
+    }
+
+    try {
+      setLoadingSupplier(true);
+      setSupplierLoadError("");
+
+      const currentUser = getAuth().currentUser;
+
+      if (!currentUser) {
+        throw new Error("You must be logged in.");
+      }
+
+      if (order.status !== "Issued") {
+        throw new Error("Only Issued Purchase Orders can be selected.");
+      }
+
+      if (!order.supplierId) {
+        throw new Error("The selected PO does not have a supplierId.");
+      }
+
+      let collectionName;
+
+      if (order.supplierType === "Supplier") {
+        collectionName = "Suppliers";
+      } else if (order.supplierType === "Subcontractor") {
+        collectionName = "Subcontractors";
+      } else {
+        throw new Error("Invalid Supplier Type on the selected PO.");
+      }
+
+      const supplierRef = doc(
+        db,
+        collectionName,
+        order.supplierId
+      );
+
+      const snapshot = await getDoc(supplierRef);
+
+      if (!snapshot.exists()) {
+        throw new Error(`${collectionName} document not found.`);
+      }
+
+      const data = snapshot.data();
+
+      if (data.uid !== currentUser.UID && data.uid !== currentUser.uid) {
+        throw new Error(
+          "You do not have permission to access this Purchase Order."
+        );
+      }
+
+      const poSupplier = order.supplier || {};
+
+      const supplierData = {
+        name: data.name || "",
+        short: data.short || "",
+        abn: data.abn || "",
+        address: data.address || "",
+        contact: poSupplier.contact || "",
+        email: poSupplier.email || "",
+        phone: poSupplier.phone || "",
+        bankName: data.bankName || "",
+        bankAccount: data.bankAccount || "",
+        BSB: data.BSB || "",
+        accountName: data.accountName || data.name || "",
+      };
+
+      setSupplier(supplierData);
+
+      setForm((previous) => ({
+        ...previous,
+        invoiceNumber: supplierData.short
+          ? generateInvoiceNumber(
+              supplierData.short,
+              previous.invoiceDate
+            )
+          : "",
+      }));
+    } catch (err) {
+      console.error("Failed to load Supplier:", err);
+
+      setSupplier(EMPTY_SUPPLIER);
+      setSupplierLoadError(
+        err.message || "Failed to load Supplier information."
+      );
+
+      setForm((previous) => ({
+        ...previous,
+        invoiceNumber: "",
+      }));
+    } finally {
+      setLoadingSupplier(false);
+    }
+  }
+
+  // ==========================================================
+  // 5. Select PO and automatically fill invoice information
+  // ==========================================================
+
+  async function handlePurchaseOrderChange(purchaseOrderId) {
+    const selected = purchaseOrders.find(
+      (order) => order.id === purchaseOrderId
+    );
+
+    setSavedInvoice(null);
+    setError("");
+
+    if (!selected) {
+      setForm((previous) => ({
+        ...previous,
+        purchaseOrderId: "",
+        poNumber: "",
+        projectId: "",
+        projectName: "",
+        siteAddress: "",
+        scopeOfWork: "",
+        invoiceNumber: "",
+      }));
+
+      setItems([{ description: "", qty: 1, unitPrice: "", tax: 0 }]);
+      setSupplier(EMPTY_SUPPLIER);
+      return;
+    }
+
+    setForm((previous) => ({
+      ...previous,
+      purchaseOrderId: selected.id,
+      poNumber: selected.poNumber || "",
+      projectId: selected.projectId || "",
+      projectName: selected.projectName || "",
+      siteAddress: selected.siteAddress || "",
+      scopeOfWork: selected.scopeOfWork || "",
+    }));
+
+    const poItems = Array.isArray(selected.items) ? selected.items : [];
+
+    setItems(
+      poItems.length
+        ? poItems.map((item) => ({
+            description: item.description || "",
+            qty: Number(item.qty) || 0,
+            unitPrice:
+              item.unitPrice === undefined || item.unitPrice === null
+                ? ""
+                : item.unitPrice,
+            tax: Number(item.tax) || 0,
+          }))
+        : [{ description: "", qty: 1, unitPrice: "", tax: 0 }]
+    );
+
+    await loadSupplierForPO(selected);
+  }
+
+  // ==========================================================
+  // 6. Editable form handlers
+  // ==========================================================
+
+  function updateForm(field, value) {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+
+    setSavedInvoice(null);
+  }
+
+  function handleInvoiceDateChange(value) {
+    setForm((previous) => ({
+      ...previous,
+      invoiceDate: value,
+      dueDate: addDaysToDate(value, 20),
+      invoiceNumber: supplier.short
+        ? generateInvoiceNumber(supplier.short, value)
+        : "",
+    }));
+
+    setSavedInvoice(null);
+  }
+
+  function updateSupplier(field, value) {
+    setSupplier((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+
+    setSavedInvoice(null);
+  }
+
+  function updateItem(index, field, value) {
+    setItems((previous) =>
+      previous.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item
+      )
+    );
+
+    setSavedInvoice(null);
+  }
+
+  function addItem() {
+    setItems((previous) => [
+      ...previous,
+      { description: "", qty: 1, unitPrice: "", tax: 0 },
+    ]);
+
+    setSavedInvoice(null);
+  }
+
+  function removeItem(index) {
+    setItems((previous) =>
+      previous.filter((_, itemIndex) => itemIndex !== index)
+    );
+
+    setSavedInvoice(null);
+  }
+
+  // ==========================================================
+  // 7. Calculations
+  // ==========================================================
 
   const calculatedItems = useMemo(
     () =>
@@ -133,43 +488,12 @@ export default function NewSubInvoicePage() {
     [calculatedItems]
   );
 
-  // Match the original Invoice page: GST is calculated as 10% of subtotal.
   const gst = subtotal * 0.1;
   const total = subtotal + gst;
 
   // ==========================================================
-  // 3. Form and item handlers
+  // 8. Save Sub-Invoice
   // ==========================================================
-  function handleChange(event) {
-    const { name, value } = event.target;
-    setForm((previous) => ({ ...previous, [name]: value }));
-  }
-
-  function updateItem(index, field, value) {
-    setItems((previous) =>
-      previous.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item
-      )
-    );
-  }
-
-  function addItem() {
-    setItems((previous) => [
-      ...previous,
-      { description: "", qty: 1, unitPrice: "", tax: 0 },
-    ]);
-  }
-
-  function removeItem(index) {
-    setItems((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
-  }
-
-  // ==========================================================
-  // 4. Save Sub-Invoice
-  // ==========================================================
-  const [saving, setSaving] = useState(false);
-  const [savedInvoice, setSavedInvoice] = useState(null);
-  const [error, setError] = useState("");
 
   async function handleSave() {
     setError("");
@@ -180,33 +504,130 @@ export default function NewSubInvoicePage() {
     }
 
     if (!form.invoiceDate) {
-      setError("Please select an invoice date.");
+      setError("Please select an Invoice Date.");
+      return;
+    }
+
+    if (!selectedPurchaseOrder) {
+      setError("Please select a Purchase Order.");
+      return;
+    }
+
+    if (!selectedPurchaseOrder.supplierId) {
+      setError("The selected PO does not have a supplierId.");
+      return;
+    }
+
+    if (loadingSupplier) {
+      setError("Please wait for Supplier information to load.");
+      return;
+    }
+
+    if (supplierLoadError) {
+      setError(supplierLoadError);
+      return;
+    }
+
+    if (!supplier.name) {
+      setError("The Supplier record has no company name.");
       return;
     }
 
     try {
       setSaving(true);
 
+      const currentUser = getAuth().currentUser;
+
+      if (!currentUser) {
+        throw new Error("You must be logged in to create an invoice.");
+      }
+
+      // Re-check the PO from Firestore before saving
+      const latestPORef = doc(
+        db,
+        "purchaseOrders",
+        selectedPurchaseOrder.id
+      );
+
+      const latestPOSnapshot = await getDoc(latestPORef);
+
+      if (!latestPOSnapshot.exists()) {
+        throw new Error("The selected Purchase Order no longer exists.");
+      }
+
+      const latestPO = latestPOSnapshot.data();
+
+      if (latestPO.status !== "Issued") {
+        throw new Error("This Purchase Order is no longer Issued.");
+      }
+
+      if (
+        latestPO.supplierId !== selectedPurchaseOrder.supplierId ||
+        latestPO.supplierType !== selectedPurchaseOrder.supplierType
+      ) {
+        throw new Error("The Purchase Order supplier information has changed. Please reload the page.");
+      }
+
+      const supplierCollection =
+        latestPO.supplierType === "Supplier"
+          ? "Suppliers"
+          : latestPO.supplierType === "Subcontractor"
+            ? "Subcontractors"
+            : null;
+
+      if (!supplierCollection) {
+        throw new Error("Invalid Supplier Type on the selected PO.");
+      }
+
+      const latestSupplierSnapshot = await getDoc(
+        doc(db, supplierCollection, latestPO.supplierId)
+      );
+
+      if (
+        !latestSupplierSnapshot.exists() ||
+        (latestSupplierSnapshot.data().uid !== currentUser.UID && latestSupplierSnapshot.data().uid !== currentUser.uid)
+      ) {
+        throw new Error(
+          "You do not have permission to create an invoice for this Purchase Order."
+        );
+      }
+
       const invoiceData = {
-        // Identify this document as a Sub-Invoice.
         invoiceType: "sub-invoice",
         invoiceNumber: form.invoiceNumber.trim(),
         invoiceDate: form.invoiceDate,
-        dueDate: form.dueDate,
+        dueDate: form.dueDate || "",
         status: form.status || "Draft",
-        poNumber: form.poNumber.trim(),
-        purchaseOrderId: selectedPurchaseOrder?.id || "",
 
-        // Intentionally no clientId, client, clientName,
-        // clientAddress, projectId, or projectName fields.
+        purchaseOrderId: selectedPurchaseOrder.id,
+        poNumber: selectedPurchaseOrder.poNumber,
+        supplierType: selectedPurchaseOrder.supplierType || "",
+        supplierId: selectedPurchaseOrder.supplierId,
+
+        supplier: {
+          name: supplier.name,
+          short: supplier.short,
+          abn: supplier.abn,
+          address: supplier.address,
+          contact: supplier.contact,
+          email: supplier.email,
+          phone: supplier.phone,
+          bankName: supplier.bankName,
+          bankAccount: supplier.bankAccount,
+          BSB: supplier.BSB,
+        },
+
+        projectId: form.projectId,
+        projectName: form.projectName,
+        siteAddress: form.siteAddress,
+        scopeOfWork: form.scopeOfWork,
+
         items: calculatedItems,
         subtotal,
         gst,
         total,
-        notes: form.notes,
-        accountManager: form.accountManager,
-        accountManagerEmail: form.accountManagerEmail,
 
+        notes: form.notes || "",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -222,19 +643,18 @@ export default function NewSubInvoicePage() {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-    } catch (saveError) {
-      console.error("Failed to create Sub-Invoice:", saveError);
-      setError("Failed to create Sub-Invoice. Please try again.");
+    } catch (err) {
+      console.error("Failed to create Sub-Invoice:", err);
+      setError(err.message || "Failed to create Sub-Invoice.");
     } finally {
       setSaving(false);
     }
   }
 
   // ==========================================================
-  // 5. PDF data
-  // No Client or Project data is passed to the existing template.
-  // Check InvoicePDF.jsx for hard-coded Client/Project sections.
+  // 9. PDF data
   // ==========================================================
+
   const pdfData = savedInvoice || {
     invoiceType: "sub-invoice",
     invoiceNumber: form.invoiceNumber,
@@ -242,30 +662,35 @@ export default function NewSubInvoicePage() {
     dueDate: form.dueDate,
     status: form.status,
     poNumber: form.poNumber,
-    purchaseOrderId: selectedPurchaseOrder?.id || "",
+    purchaseOrderId: form.purchaseOrderId,
+    supplierType: selectedPurchaseOrder?.supplierType || "",
+    supplierId: selectedPurchaseOrder?.supplierId || "",
+    supplier,
+    projectId: form.projectId,
+    projectName: form.projectName,
+    siteAddress: form.siteAddress,
+    scopeOfWork: form.scopeOfWork,
     items: calculatedItems,
     subtotal,
     gst,
     total,
     notes: form.notes,
-    accountManager: form.accountManager,
-    accountManagerEmail: form.accountManagerEmail,
   };
 
   // ==========================================================
-  // 6. Page UI
+  // 10. UI
   // ==========================================================
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl">
-        {/* Header */}
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">
-              New Invoice
+              New Sub-Invoice
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Create a new invoice
+              Create an invoice from a Purchase Order
             </p>
           </div>
 
@@ -280,33 +705,25 @@ export default function NewSubInvoicePage() {
         <div className="space-y-6">
           {/* Invoice Information */}
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-lg font-semibold text-gray-900">
-              Invoice Information
-            </h2>
+            <h2 className="mb-5 text-lg font-semibold">Invoice Information</h2>
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Invoice Number
-                </label>
+                <label className="mb-1 block text-sm font-medium">Invoice Number</label>
                 <input
-                  name="invoiceNumber"
                   value={form.invoiceNumber}
-                  onChange={handleChange}
-                  placeholder="INV-0001"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  onChange={(e) => updateForm("invoiceNumber", e.target.value)}
+                  placeholder="INV-SHORTDDMMYY"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Status
-                </label>
+                <label className="mb-1 block text-sm font-medium">Status</label>
                 <select
-                  name="status"
                   value={form.status}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-black"
+                  onChange={(e) => updateForm("status", e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="Draft">Draft</option>
                   <option value="Issued">Issued</option>
@@ -317,77 +734,151 @@ export default function NewSubInvoicePage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Invoice Date
-                </label>
+                <label className="mb-1 block text-sm font-medium">Invoice Date</label>
                 <input
                   type="date"
-                  name="invoiceDate"
                   value={form.invoiceDate}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  onChange={(e) => handleInvoiceDateChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Due Date
-                </label>
+                <label className="mb-1 block text-sm font-medium">Due Date</label>
                 <input
                   type="date"
-                  name="dueDate"
                   value={form.dueDate}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  onChange={(e) => updateForm("dueDate", e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
+                <label className="mb-1 block text-sm font-medium">
                   PO Number
                 </label>
 
-                {loadingPOs ? (
-                  <div className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                    Loading PO Numbers...
-                  </div>
-                ) : (
-                  <select
-                    name="poNumber"
-                    value={form.poNumber}
-                    onChange={handleChange}
-                    className="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-black"
-                  >
-                    <option value="">Select PO Number</option>
-                    {purchaseOrders.map((order) => (
-                      <option key={order.id} value={order.poNumber}>
-                        {order.poNumber}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  value={form.purchaseOrderId}
+                  onChange={(e) =>
+                    handlePurchaseOrderChange(e.target.value)
+                  }
+                  disabled={
+                    loadingPOs ||
+                    purchaseOrders.length === 0
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                >
+                  <option value="">
+                    {loadingPOs
+                      ? "Loading Purchase Orders..."
+                      : purchaseOrders.length === 0
+                        ? "No PO Available"
+                        : "Select PO Number"}
+                  </option>
 
-                {poLoadError ? (
-                  <p className="mt-1 text-sm text-red-600">{poLoadError}</p>
-                ) : !loadingPOs && purchaseOrders.length === 0 ? (
-                  <p className="mt-1 text-sm text-amber-700">
-                    No PO Numbers found. Check the purchaseOrders collection and PO number field.
+                  {purchaseOrders.map((order) => (
+                    <option key={order.id} value={order.id}>
+                      {order.poNumber}
+                    </option>
+                  ))}
+                </select>
+
+                {poLoadError && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {poLoadError}
                   </p>
-                ) : null}
+                )}
               </div>
+            </div>
+          </section>
+
+          {/* Send From */}
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Send From</h2>
+              <span className="text-xs text-gray-500">
+                {selectedPurchaseOrder?.supplierType || ""}
+              </span>
+            </div>
+
+            {loadingSupplier ? (
+              <p className="text-sm text-gray-500">Loading Supplier information...</p>
+            ) : supplierLoadError ? (
+              <p className="text-sm text-red-600">{supplierLoadError}</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {[
+                  ["Company Name", "name"],
+                  ["ABN", "abn"],
+                  ["Contact", "contact"],
+                  ["Email", "email"],
+                  ["Phone", "phone"],
+                  ["Address", "address"],
+                  ["Account Name", "accountName"],
+                  ["BSB", "BSB"],
+                  ["Account Number", "bankAccount"],
+                ].map(([label, field]) => (
+                  <div key={field}>
+                    <label className="mb-1 block text-sm text-gray-500">{label}</label>
+                    <input
+                      value={
+                        field === "accountName"
+                          ? supplier.accountName ?? supplier.name
+                          : supplier[field] || ""
+                      }
+                      onChange={(e) =>
+                        updateSupplier(
+                          field === "accountName" ? "accountName" : field,
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Project Information */}
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-5 text-lg font-semibold">Project Information</h2>
+            <div className="space-y-4">
+              {[
+                ["Project", "projectName"],
+                ["Site Address", "siteAddress"],
+                ["Scope of Work", "scopeOfWork"],
+              ].map(([label, field]) => (
+                <div key={field}>
+                  <label className="mb-1 block text-sm text-gray-500">{label}</label>
+                  {field === "scopeOfWork" ? (
+                    <textarea
+                      value={form[field]}
+                      onChange={(e) => updateForm(field, e.target.value)}
+                      rows={3}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  ) : (
+                    <input
+                      value={form[field]}
+                      onChange={(e) => updateForm(field, e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  )}
+                </div>
+              ))}
             </div>
           </section>
 
           {/* Invoice Items */}
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Invoice Items
-              </h2>
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Invoice Items</h2>
               <button
                 type="button"
                 onClick={addItem}
-                className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
+                className="rounded-lg bg-indigo-800 px-4 py-2 text-sm text-white hover:bg-amber-400 hover:text-black"
               >
                 + Add Item
               </button>
@@ -396,80 +887,61 @@ export default function NewSubInvoicePage() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[700px] text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 text-left">
-                    <th className="pb-3 pr-3 font-medium text-gray-600">Description</th>
-                    <th className="w-24 pb-3 pr-3 font-medium text-gray-600">Qty</th>
-                    <th className="w-36 pb-3 pr-3 font-medium text-gray-600">Unit Price</th>
-                    <th className="w-24 pb-3 pr-3 font-medium text-gray-600">Tax %</th>
-                    <th className="w-36 pb-3 pr-3 font-medium text-gray-600">Total</th>
-                    <th className="w-20 pb-3 font-medium text-gray-600"></th>
+                  <tr className="border-b text-left">
+                    <th className="pb-3 pr-3">Description</th>
+                    <th className="w-24 pb-3 pr-3">Qty</th>
+                    <th className="w-36 pb-3 pr-3">Unit Price</th>
+                    <th className="w-24 pb-3 pr-3">Tax %</th>
+                    <th className="w-36 pb-3 pr-3">Total</th>
+                    <th className="w-20 pb-3"></th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {calculatedItems.map((item, index) => (
                     <tr key={index} className="border-b border-gray-100">
                       <td className="py-3 pr-3">
                         <input
                           value={item.description}
-                          onChange={(event) =>
-                            updateItem(index, "description", event.target.value)
-                          }
-                          placeholder="Description"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) => updateItem(index, "description", e.target.value)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2"
                         />
                       </td>
-
                       <td className="py-3 pr-3">
                         <input
                           type="number"
                           min="0"
-                          step="1"
                           value={item.qty}
-                          onChange={(event) =>
-                            updateItem(index, "qty", event.target.value)
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) => updateItem(index, "qty", e.target.value)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2"
                         />
                       </td>
-
                       <td className="py-3 pr-3">
                         <input
                           type="number"
                           min="0"
                           step="0.01"
                           value={item.unitPrice}
-                          onChange={(event) =>
-                            updateItem(index, "unitPrice", event.target.value)
-                          }
-                          placeholder="0.00"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2"
                         />
                       </td>
-
                       <td className="py-3 pr-3">
                         <input
                           type="number"
                           min="0"
                           step="0.1"
                           value={item.tax}
-                          onChange={(event) =>
-                            updateItem(index, "tax", event.target.value)
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) => updateItem(index, "tax", e.target.value)}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2"
                         />
                       </td>
-
-                      <td className="py-3 pr-3 font-medium">
-                        ${money(item.total)}
-                      </td>
-
+                      <td className="py-3 pr-3 font-medium">${money(item.total)}</td>
                       <td className="py-3">
                         {items.length > 1 && (
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
-                            className="text-sm text-red-600 hover:text-red-800"
+                            className="text-red-600 hover:text-red-800"
                           >
                             Remove
                           </button>
@@ -481,24 +953,19 @@ export default function NewSubInvoicePage() {
               </table>
             </div>
 
-            {/* Totals */}
             <div className="mt-6 flex justify-end">
               <div className="w-full max-w-sm space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">${money(subtotal)}</span>
+                  <span>Subtotal</span>
+                  <span>${money(subtotal)}</span>
                 </div>
-
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">GST (10%)</span>
-                  <span className="font-medium">${money(gst)}</span>
+                  <span>GST (10%)</span>
+                  <span>${money(gst)}</span>
                 </div>
-
-                <div className="border-t border-gray-200 pt-3">
-                  <div className="flex justify-between text-lg font-semibold">
-                    <span>Total</span>
-                    <span>${money(total)}</span>
-                  </div>
+                <div className="flex justify-between border-t pt-3 text-lg font-semibold">
+                  <span>Total</span>
+                  <span>${money(total)}</span>
                 </div>
               </div>
             </div>
@@ -506,97 +973,54 @@ export default function NewSubInvoicePage() {
 
           {/* Notes */}
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-lg font-semibold text-gray-900">Notes</h2>
+            <h2 className="mb-5 text-lg font-semibold">Notes</h2>
             <textarea
-              name="notes"
               value={form.notes}
-              onChange={handleChange}
-              rows={5}
+              onChange={(e) => updateForm("notes", e.target.value)}
+              rows={4}
               placeholder="Payment instructions, additional notes, etc."
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
           </section>
 
-          {/* YJ Contact */}
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-lg font-semibold text-gray-900">YJ Contact</h2>
-
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Contact Name
-                </label>
-                <input
-                  name="accountManager"
-                  value={form.accountManager}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Contact Email
-                </label>
-                <input
-                  type="email"
-                  name="accountManagerEmail"
-                  value={form.accountManagerEmail}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Error */}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex justify-end gap-3">
             <Link
               href="/sub-invoices"
-              className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm"
             >
               Cancel
             </Link>
-
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
-              className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={saving || loadingSupplier}
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white hover:bg-amber-400 hover:text-black disabled:opacity-50"
             >
-              {saving ? "Saving..." : "Create Invoice"}
+              {saving ? "Creating..." : "Create Invoice"}
             </button>
           </div>
 
-          {/* PDF Preview and Download */}
           {savedInvoice && (
             <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Invoice PDF
-                </h2>
-
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Invoice PDF</h2>
                 <PDFDownloadLink
-                  document={<InvoicePDF invoice={pdfData} />}
-                  fileName={`${form.invoiceNumber || "newinvoice"}.pdf`}
-                  className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
+                  document={<SubinvoicePDF invoice={pdfData} />}
+                  fileName={`${form.invoiceNumber || "invoice"}.pdf`}
+                  className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white"
                 >
-                  {({ loading }) =>
-                    loading ? "Preparing PDF..." : "Download PDF"
-                  }
+                  {({ loading }) => loading ? "Preparing PDF..." : "Download PDF"}
                 </PDFDownloadLink>
               </div>
-
-              <div className="overflow-hidden rounded-lg border border-gray-200">
+              <div className="overflow-hidden rounded-lg border">
                 <PDFViewer width="100%" height={800} showToolbar>
-                  <InvoicePDF invoice={pdfData} />
+                  <SubinvoicePDF invoice={pdfData} />
                 </PDFViewer>
               </div>
             </section>
@@ -606,3 +1030,4 @@ export default function NewSubInvoicePage() {
     </div>
   );
 }
+

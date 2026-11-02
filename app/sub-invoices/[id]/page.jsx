@@ -1,16 +1,15 @@
-
 "use client";
 
 // ============================================================
 // Sub-Invoice - Detail / Edit Page
-// Based on the New Sub-Invoice page.
 // Reads and updates Firestore collection: subInvoices.
-// No Client or Project fields.
+// PO access restricted to current user's own Issued POs.
 // ============================================================
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   doc,
@@ -21,8 +20,36 @@ import {
 } from "firebase/firestore";
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 
-import { db } from "@/lib/firebase";
-import InvoicePDF from "@/components/InvoicePDF";
+import { auth, db } from "@/lib/firebase";
+import SubinvoicePDF from "@/components/SubinvoicePDF";
+
+// ============================================================
+// 1. Helpers
+// ============================================================
+
+function localDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDate(dateString, days = 20) {
+  if (!dateString) return "";
+
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+
+  return localDate(date);
+}
+
+function generateInvoiceNumber(short, dateString) {
+  if (!short || !dateString) return "";
+
+  const [year, month, day] = dateString.split("-");
+  return `INV-${String(short).trim()}${day}${month}${year.slice(-2)}`;
+}
 
 const money = (value) =>
   Number(value || 0).toLocaleString("en-AU", {
@@ -30,23 +57,37 @@ const money = (value) =>
     maximumFractionDigits: 2,
   });
 
+const EMPTY_SUPPLIER = {
+  name: "",
+  short: "",
+  abn: "",
+  address: "",
+  contact: "",
+  email: "",
+  phone: "",
+  bankAccount: "",
+  BSB: "",
+  accountName: "",
+};
+
 const normaliseItems = (items) =>
-  Array.isArray(items)
+  Array.isArray(items) && items.length
     ? items.map((item) => ({
         description: item?.description || "",
         qty: Number(item?.qty) || 0,
-        unitPrice: Number(item?.unitPrice) || 0,
+        unitPrice: item?.unitPrice ?? "",
         tax: Number(item?.tax) || 0,
       }))
     : [{ description: "", qty: 1, unitPrice: "", tax: 0 }];
+
+// ============================================================
+// 2. Component
+// ============================================================
 
 export default function SubInvoiceDetailPage() {
   const params = useParams();
   const invoiceId = params?.id;
 
-  // ==========================================================
-  // 1. State
-  // ==========================================================
   const [invoice, setInvoice] = useState(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -58,6 +99,8 @@ export default function SubInvoiceDetailPage() {
   const [loadingPOs, setLoadingPOs] = useState(true);
   const [poLoadError, setPoLoadError] = useState("");
 
+  const [supplier, setSupplier] = useState(EMPTY_SUPPLIER);
+
   const [form, setForm] = useState({
     invoiceNumber: "",
     invoiceDate: "",
@@ -65,27 +108,67 @@ export default function SubInvoiceDetailPage() {
     status: "Draft",
     poNumber: "",
     purchaseOrderId: "",
+    projectId: "",
+    projectName: "",
+    siteAddress: "",
+    scopeOfWork: "",
     items: [{ description: "", qty: 1, unitPrice: "", tax: 0 }],
     notes: "",
-    accountManager: "Leo",
-    accountManagerEmail: "leo.l@yjliningscreation.com.au",
   });
 
   // ==========================================================
-  // 2. Load PO Numbers from purchaseOrders
+  // 3. Load current user's Issued Purchase Orders
   // ==========================================================
+
   useEffect(() => {
     let active = true;
+    let unsubscribe;
 
-    async function loadPurchaseOrders() {
+    async function loadPurchaseOrders(currentUser) {
       try {
         setLoadingPOs(true);
         setPoLoadError("");
 
-        const snapshot = await getDocs(collection(db, "purchaseOrders"));
-        const orders = snapshot.docs
+        if (!currentUser) {
+          throw new Error("You must be logged in to load Purchase Orders.");
+        }
+
+        const currentUID = currentUser.uid;
+
+        // Load both Supplier and Subcontractor collections.
+        const [suppliersSnapshot, subcontractorsSnapshot, poSnapshot] =
+          await Promise.all([
+            getDocs(collection(db, "Suppliers")),
+            getDocs(collection(db, "Subcontractors")),
+            getDocs(collection(db, "purchaseOrders")),
+          ]);
+
+        // Only keep supplier documents belonging to current user.
+        const ownSuppliers = new Set(
+          suppliersSnapshot.docs
+            .filter((supplierDoc) => {
+              return supplierDoc.data().uid === currentUID;
+            })
+            .map((supplierDoc) => `Supplier:${supplierDoc.id}`)
+        );
+
+        const ownSubcontractors = new Set(
+          subcontractorsSnapshot.docs
+            .filter((supplierDoc) => {
+              return supplierDoc.data().uid === currentUID;
+            })
+            .map((supplierDoc) => `Subcontractor:${supplierDoc.id}`)
+        );
+
+        // Filter PO by:
+        // 1. status === "Issued"
+        // 2. supplierId belongs to current user's supplier document
+        // 3. supplierType matches the corresponding collection
+        // 4. PO number is not empty
+        const orders = poSnapshot.docs
           .map((poDoc) => {
             const data = poDoc.data();
+
             const poNumber =
               data.poNumber ||
               data.purchaseOrderNumber ||
@@ -99,27 +182,64 @@ export default function SubInvoiceDetailPage() {
               poNumber: String(poNumber).trim(),
             };
           })
-          .filter((order) => order.poNumber)
+          .filter((order) => {
+            if (order.status !== "Issued") return false;
+            if (!order.supplierId || !order.poNumber) return false;
+
+            if (order.supplierType === "Subcontractor") {
+              return ownSubcontractors.has(
+                `Subcontractor:${order.supplierId}`
+              );
+            }
+
+            if (order.supplierType === "Supplier") {
+              return ownSuppliers.has(`Supplier:${order.supplierId}`);
+            }
+
+            return false;
+          })
           .sort((a, b) => a.poNumber.localeCompare(b.poNumber));
 
-        if (active) setPurchaseOrders(orders);
+        if (active) {
+          setPurchaseOrders(orders);
+        }
       } catch (err) {
-        console.error("Failed to load purchase orders:", err);
-        if (active) setPoLoadError("Failed to load PO Numbers from Firebase.");
+        console.error("Failed to load Purchase Orders:", err);
+
+        if (active) {
+          setPoLoadError(
+            err.message || "Failed to load Purchase Orders."
+          );
+        }
       } finally {
-        if (active) setLoadingPOs(false);
+        if (active) {
+          setLoadingPOs(false);
+        }
       }
     }
 
-    loadPurchaseOrders();
+    // Wait for Firebase Auth to restore the current user.
+    unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        setPurchaseOrders([]);
+        setPoLoadError("You must be logged in to load Purchase Orders.");
+        setLoadingPOs(false);
+        return;
+      }
+
+      loadPurchaseOrders(currentUser);
+    });
+
     return () => {
       active = false;
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 
   // ==========================================================
-  // 3. Load Sub-Invoice by document ID
+  // 4. Load current Sub-Invoice
   // ==========================================================
+
   useEffect(() => {
     let active = true;
 
@@ -134,18 +254,33 @@ export default function SubInvoiceDetailPage() {
         setLoading(true);
         setError("");
 
-        const invoiceRef = doc(db, "subInvoices", String(invoiceId));
-        const snapshot = await getDoc(invoiceRef);
+        const snapshot = await getDoc(
+          doc(db, "subInvoices", String(invoiceId))
+        );
 
         if (!snapshot.exists()) {
           if (active) setError("Invoice not found.");
           return;
         }
 
-        const data = { id: snapshot.id, ...snapshot.data() };
+        const data = {
+          id: snapshot.id,
+          ...snapshot.data(),
+        };
+
         if (!active) return;
 
         setInvoice(data);
+
+        setSupplier({
+          ...EMPTY_SUPPLIER,
+          ...(data.supplier || {}),
+          accountName:
+            data.supplier?.accountName ||
+            data.supplier?.bankName ||
+            "",
+        });
+
         setForm({
           invoiceNumber: data.invoiceNumber || "",
           invoiceDate: data.invoiceDate || data.date || "",
@@ -153,34 +288,302 @@ export default function SubInvoiceDetailPage() {
           status: data.status || "Draft",
           poNumber: data.poNumber || "",
           purchaseOrderId: data.purchaseOrderId || "",
+          projectId: data.projectId || "",
+          projectName: data.projectName || "",
+          siteAddress: data.siteAddress || "",
+          scopeOfWork: data.scopeOfWork || "",
           items: normaliseItems(data.items),
           notes: data.notes || "",
-          accountManager: data.accountManager || "Leo",
-          accountManagerEmail:
-            data.accountManagerEmail || "leo.l@yjliningscreation.com.au",
         });
       } catch (err) {
-        console.error("Failed to load Invoice:", err);
-        if (active) setError(err.message || "Failed to load Invoice.");
+        console.error("Failed to load Sub-Invoice:", err);
+
+        if (active) {
+          setError(err.message || "Failed to load Invoice.");
+        }
       } finally {
         if (active) setLoading(false);
       }
     }
 
     loadSubInvoice();
+
     return () => {
       active = false;
     };
   }, [invoiceId]);
 
-  // Resolve the selected PO by Firestore document ID, avoiding duplicate-number ambiguity.
   const selectedPurchaseOrder = purchaseOrders.find(
     (order) => order.id === form.purchaseOrderId
   );
 
   // ==========================================================
-  // 4. Calculations and PDF data
+  // 5. Form handlers
   // ==========================================================
+
+  function updateForm(field, value) {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+
+    setSaved(false);
+  }
+
+  function handleInvoiceDateChange(value) {
+    setForm((previous) => ({
+      ...previous,
+      invoiceDate: value,
+      dueDate: addDaysToDate(value, 20),
+      invoiceNumber: supplier.short
+        ? generateInvoiceNumber(supplier.short, value)
+        : "",
+    }));
+
+    setSaved(false);
+  }
+
+  function updateSupplier(field, value) {
+    setSupplier((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+
+    setSaved(false);
+  }
+
+  function updateItem(index, field, value) {
+    setForm((previous) => ({
+      ...previous,
+      items: previous.items.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, [field]: value }
+          : item
+      ),
+    }));
+
+    setSaved(false);
+  }
+
+  function addItem() {
+    setForm((previous) => ({
+      ...previous,
+      items: [
+        ...previous.items,
+        { description: "", qty: 1, unitPrice: "", tax: 0 },
+      ],
+    }));
+
+    setSaved(false);
+  }
+
+  function removeItem(index) {
+    setForm((previous) => ({
+      ...previous,
+      items: previous.items.filter(
+        (_, itemIndex) => itemIndex !== index
+      ),
+    }));
+
+    setSaved(false);
+  }
+
+  // ==========================================================
+  // 6. Verify PO ownership and status
+  // ==========================================================
+
+  async function verifyPurchaseOrder(purchaseOrderId) {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      throw new Error("You must be logged in.");
+    }
+
+    if (!purchaseOrderId) {
+      throw new Error("Please select a Purchase Order.");
+    }
+
+    // Read the latest PO document from Firestore.
+    const poRef = doc(
+      db,
+      "purchaseOrders",
+      purchaseOrderId
+    );
+
+    const poSnapshot = await getDoc(poRef);
+
+    if (!poSnapshot.exists()) {
+      throw new Error("Purchase Order not found.");
+    }
+
+    const order = {
+      id: poSnapshot.id,
+      ...poSnapshot.data(),
+    };
+
+    // Check latest PO status.
+    if (order.status !== "Issued") {
+      throw new Error(
+        "Only Issued Purchase Orders can be used for Sub-Invoices."
+      );
+    }
+
+    if (!order.supplierId) {
+      throw new Error(
+        "The selected PO does not have a supplierId."
+      );
+    }
+
+    const collectionName =
+      order.supplierType === "Subcontractor"
+        ? "Subcontractors"
+        : order.supplierType === "Supplier"
+          ? "Suppliers"
+          : "";
+
+    if (!collectionName) {
+      throw new Error("Invalid Purchase Order supplierType.");
+    }
+
+    // Read the linked Supplier/Subcontractor document.
+    const supplierSnapshot = await getDoc(
+      doc(db, collectionName, order.supplierId)
+    );
+
+    if (!supplierSnapshot.exists()) {
+      throw new Error(`${collectionName} document not found.`);
+    }
+
+    const supplierData = supplierSnapshot.data();
+
+    // Verify current Firebase Auth UID.
+    if (
+      !supplierData.uid ||
+      supplierData.uid !== currentUser.uid
+    ) {
+      throw new Error(
+        "You do not have permission to access this Purchase Order."
+      );
+    }
+
+    return {
+      order,
+      supplierData,
+      collectionName,
+    };
+  }
+
+  // ==========================================================
+  // 7. Change PO and reload its linked information
+  // ==========================================================
+
+  async function handlePurchaseOrderChange(purchaseOrderId) {
+    if (!purchaseOrderId) {
+      setError("Please select a Purchase Order.");
+      return;
+    }
+
+    // Only allow PO currently shown in the filtered dropdown.
+    const allowedPO = purchaseOrders.find(
+      (order) => order.id === purchaseOrderId
+    );
+
+    if (!allowedPO) {
+      setError(
+        "This Purchase Order is not available for your account."
+      );
+      return;
+    }
+
+    try {
+      setError("");
+      setSaved(false);
+
+      const {
+        order,
+        supplierData,
+      } = await verifyPurchaseOrder(purchaseOrderId);
+
+      const poNumber =
+        order.poNumber ||
+        order.purchaseOrderNumber ||
+        order.orderNumber ||
+        order.number ||
+        "";
+
+      const poItems = Array.isArray(order.items)
+        ? order.items
+        : [];
+
+      const nextSupplier = {
+        name: supplierData.name || "",
+        short: supplierData.short || "",
+        abn: supplierData.abn || "",
+        address: supplierData.address || "",
+        contact: order.supplier?.contact || "",
+        email: order.supplier?.email || "",
+        phone: order.supplier?.phone || "",
+        bankAccount: supplierData.bankAccount || "",
+        BSB: supplierData.BSB || "",
+        accountName: supplierData.bankName || "",
+      };
+
+      setSupplier(nextSupplier);
+
+      setForm((previous) => ({
+        ...previous,
+        purchaseOrderId: order.id,
+        poNumber: String(poNumber).trim(),
+        projectId: order.projectId || "",
+        projectName: order.projectName || "",
+        siteAddress: order.siteAddress || "",
+        scopeOfWork: order.scopeOfWork || "",
+        items: poItems.length
+          ? poItems.map((item) => ({
+              description: item.description || "",
+              qty: Number(item.qty) || 0,
+              unitPrice: item.unitPrice ?? "",
+              tax: Number(item.tax) || 0,
+            }))
+          : [
+              {
+                description: "",
+                qty: 1,
+                unitPrice: "",
+                tax: 0,
+              },
+            ],
+
+        // If supplier short is empty, do not generate invoice number.
+        invoiceNumber: nextSupplier.short
+          ? generateInvoiceNumber(
+              nextSupplier.short,
+              previous.invoiceDate
+            )
+          : "",
+      }));
+    } catch (err) {
+      console.error("Failed to reload Supplier:", err);
+
+      setSupplier(EMPTY_SUPPLIER);
+
+      setForm((previous) => ({
+        ...previous,
+        purchaseOrderId: "",
+        poNumber: "",
+        invoiceNumber: "",
+      }));
+
+      setError(
+        err.message || "Failed to load Supplier information."
+      );
+    }
+  }
+
+  // ==========================================================
+  // 8. Calculations and PDF data
+  // ==========================================================
+
   const calculatedItems = useMemo(
     () =>
       form.items.map((item) => {
@@ -200,102 +603,61 @@ export default function SubInvoiceDetailPage() {
   );
 
   const subtotal = useMemo(
-    () => calculatedItems.reduce((sum, item) => sum + item.total, 0),
+    () =>
+      calculatedItems.reduce(
+        (sum, item) => sum + item.total,
+        0
+      ),
     [calculatedItems]
   );
 
-  // Match the New Sub-Invoice page: GST is 10% of subtotal.
   const gst = subtotal * 0.1;
   const total = subtotal + gst;
 
-  const pdfData = useMemo(
-    () => ({
-      id: invoice?.id || invoiceId || "",
-      invoiceType: "sub-invoice",
-      invoiceNumber: form.invoiceNumber,
-      invoiceDate: form.invoiceDate,
-      dueDate: form.dueDate,
-      status: form.status,
-      poNumber: selectedPurchaseOrder?.poNumber || form.poNumber,
-      purchaseOrderId: selectedPurchaseOrder?.id || form.purchaseOrderId || "",
-      items: calculatedItems,
-      subtotal,
-      gst,
-      total,
-      notes: form.notes,
-      accountManager: form.accountManager,
-      accountManagerEmail: form.accountManagerEmail,
-    }),
-    [
-      invoice,
-      invoiceId,
-      form.invoiceNumber,
-      form.invoiceDate,
-      form.dueDate,
-      form.status,
-      form.poNumber,
-      form.purchaseOrderId,
-      form.notes,
-      form.accountManager,
-      form.accountManagerEmail,
-      selectedPurchaseOrder,
-      calculatedItems,
-      subtotal,
-      gst,
-      total,
-    ]
-  );
+  const pdfData = {
+    id: invoice?.id || invoiceId || "",
+    invoiceType: "sub-invoice",
+    invoiceNumber: form.invoiceNumber,
+    invoiceDate: form.invoiceDate,
+    dueDate: form.dueDate,
+    status: form.status,
+    poNumber: form.poNumber,
+    purchaseOrderId: form.purchaseOrderId,
+    supplierType:
+      selectedPurchaseOrder?.supplierType ||
+      invoice?.supplierType ||
+      "",
+    supplierId:
+      selectedPurchaseOrder?.supplierId ||
+      invoice?.supplierId ||
+      "",
+    supplier,
+    projectId: form.projectId,
+    projectName: form.projectName,
+    siteAddress: form.siteAddress,
+    scopeOfWork: form.scopeOfWork,
+    items: calculatedItems,
+    subtotal,
+    gst,
+    total,
+    notes: form.notes,
+  };
 
   // ==========================================================
-  // 5. Form handlers
+  // 9. Cancel editing
   // ==========================================================
-  function updateForm(field, value) {
-    setForm((previous) => ({ ...previous, [field]: value }));
-    setSaved(false);
-  }
-
-  function handlePurchaseOrderChange(purchaseOrderId) {
-    const selected = purchaseOrders.find((order) => order.id === purchaseOrderId);
-
-    setForm((previous) => ({
-      ...previous,
-      purchaseOrderId,
-      poNumber: selected?.poNumber || "",
-    }));
-    setSaved(false);
-  }
-
-  function updateItem(index, field, value) {
-    setForm((previous) => ({
-      ...previous,
-      items: previous.items.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item
-      ),
-    }));
-    setSaved(false);
-  }
-
-  function addItem() {
-    setForm((previous) => ({
-      ...previous,
-      items: [
-        ...previous.items,
-        { description: "", qty: 1, unitPrice: "", tax: 0 },
-      ],
-    }));
-    setSaved(false);
-  }
-
-  function removeItem(index) {
-    setForm((previous) => ({
-      ...previous,
-      items: previous.items.filter((_, itemIndex) => itemIndex !== index),
-    }));
-    setSaved(false);
-  }
 
   function handleCancel() {
     if (!invoice) return;
+
+    setSupplier({
+      ...EMPTY_SUPPLIER,
+      ...(invoice.supplier || {}),
+      accountName:
+        invoice.supplier?.accountName ||
+        invoice.supplier?.bankName ||
+        "",
+    });
 
     setForm({
       invoiceNumber: invoice.invoiceNumber || "",
@@ -304,11 +666,12 @@ export default function SubInvoiceDetailPage() {
       status: invoice.status || "Draft",
       poNumber: invoice.poNumber || "",
       purchaseOrderId: invoice.purchaseOrderId || "",
+      projectId: invoice.projectId || "",
+      projectName: invoice.projectName || "",
+      siteAddress: invoice.siteAddress || "",
+      scopeOfWork: invoice.scopeOfWork || "",
       items: normaliseItems(invoice.items),
       notes: invoice.notes || "",
-      accountManager: invoice.accountManager || "Leo",
-      accountManagerEmail:
-        invoice.accountManagerEmail || "leo.l@yjliningscreation.com.au",
     });
 
     setEditing(false);
@@ -317,8 +680,9 @@ export default function SubInvoiceDetailPage() {
   }
 
   // ==========================================================
-  // 6. Save changes to subInvoices/{id}
+  // 10. Save changes
   // ==========================================================
+
   async function handleSave() {
     setError("");
 
@@ -328,7 +692,7 @@ export default function SubInvoiceDetailPage() {
     }
 
     if (!form.invoiceDate) {
-      setError("Please select an invoice date.");
+      setError("Please select an Invoice Date.");
       return;
     }
 
@@ -339,6 +703,17 @@ export default function SubInvoiceDetailPage() {
 
     try {
       setSaving(true);
+
+      let verifiedOrder = null;
+
+      // Re-verify PO ownership and status before saving.
+      if (form.purchaseOrderId) {
+        const verification = await verifyPurchaseOrder(
+          form.purchaseOrderId
+        );
+
+        verifiedOrder = verification.order;
+      }
 
       const cleanItems = form.items.map((item) => {
         const qty = Number(item.qty) || 0;
@@ -354,12 +729,13 @@ export default function SubInvoiceDetailPage() {
         };
       });
 
-      const cleanSubtotal = cleanItems.reduce((sum, item) => sum + item.total, 0);
+      const cleanSubtotal = cleanItems.reduce(
+        (sum, item) => sum + item.total,
+        0
+      );
+
       const cleanGst = cleanSubtotal * 0.1;
       const cleanTotal = cleanSubtotal + cleanGst;
-      const cleanPONumber = selectedPurchaseOrder?.poNumber || form.poNumber.trim();
-      const cleanPurchaseOrderId =
-        selectedPurchaseOrder?.id || form.purchaseOrderId || "";
 
       const updatedData = {
         invoiceType: "sub-invoice",
@@ -367,60 +743,97 @@ export default function SubInvoiceDetailPage() {
         invoiceDate: form.invoiceDate,
         dueDate: form.dueDate || "",
         status: form.status || "Draft",
-        poNumber: cleanPONumber,
-        purchaseOrderId: cleanPurchaseOrderId,
+
+        purchaseOrderId: verifiedOrder?.id || "",
+        poNumber: verifiedOrder
+          ? String(
+              verifiedOrder.poNumber ||
+              verifiedOrder.purchaseOrderNumber ||
+              verifiedOrder.orderNumber ||
+              verifiedOrder.number ||
+              ""
+            ).trim()
+          : "",
+
+        supplierType:
+          verifiedOrder?.supplierType || "",
+        supplierId:
+          verifiedOrder?.supplierId || "",
+
+        supplier: {
+          name: supplier.name || "",
+          short: supplier.short || "",
+          abn: supplier.abn || "",
+          address: supplier.address || "",
+          contact: supplier.contact || "",
+          email: supplier.email || "",
+          phone: supplier.phone || "",
+          bankAccount: supplier.bankAccount || "",
+          BSB: supplier.BSB || "",
+          accountName: supplier.accountName || "",
+        },
+
+        projectId: form.projectId || "",
+        projectName: form.projectName || "",
+        siteAddress: form.siteAddress || "",
+        scopeOfWork: form.scopeOfWork || "",
+
         items: cleanItems,
         subtotal: cleanSubtotal,
         gst: cleanGst,
         total: cleanTotal,
         notes: form.notes || "",
-        accountManager: form.accountManager || "",
-        accountManagerEmail: form.accountManagerEmail || "",
         updatedAt: serverTimestamp(),
       };
 
-      await updateDoc(doc(db, "subInvoices", String(invoiceId)), updatedData);
+      await updateDoc(
+        doc(db, "subInvoices", String(invoiceId)),
+        updatedData
+      );
 
       const localUpdatedData = {
         ...updatedData,
-        items: cleanItems,
-        subtotal: cleanSubtotal,
-        gst: cleanGst,
-        total: cleanTotal,
         updatedAt: new Date(),
       };
 
-      setInvoice((previous) => ({ ...previous, ...localUpdatedData }));
+      setInvoice((previous) => ({
+        ...previous,
+        ...localUpdatedData,
+      }));
+
       setForm((previous) => ({
         ...previous,
-        poNumber: cleanPONumber,
-        purchaseOrderId: cleanPurchaseOrderId,
-        items: cleanItems.map(({ description, qty, unitPrice, tax }) => ({
-          description,
-          qty,
-          unitPrice,
-          tax,
-        })),
+        items: cleanItems.map(
+          ({ description, qty, unitPrice, tax }) => ({
+            description,
+            qty,
+            unitPrice,
+            tax,
+          })
+        ),
       }));
+
       setEditing(false);
       setSaved(true);
     } catch (err) {
       console.error("Failed to save Sub-Invoice:", err);
-      setError(err.message || "Failed to save Invoice.");
+
+      setError(
+        err.message || "Failed to save Invoice."
+      );
     } finally {
       setSaving(false);
     }
   }
 
   // ==========================================================
-  // 7. Loading / not found
+  // 11. Loading / not found
   // ==========================================================
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
-        <div className="mx-auto max-w-6xl">
-          <p className="text-gray-500">Loading Invoice...</p>
-        </div>
+        <p className="text-gray-500">Loading Invoice...</p>
       </div>
     );
   }
@@ -428,35 +841,91 @@ export default function SubInvoiceDetailPage() {
   if (!invoice) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
-        <div className="mx-auto max-w-6xl">
-          <Link href="/sub-invoices" className="text-sm text-gray-500 hover:text-black">
-            ← Invoices
-          </Link>
-          <div className="mt-6 rounded-xl bg-white p-8 shadow-sm">
-            <h1 className="text-2xl font-bold">Invoice Not Found</h1>
-            <p className="mt-2 text-gray-500">{error || "This Invoice could not be found."}</p>
-            <p className="mt-4 text-sm text-gray-400">Document ID: {invoiceId}</p>
-          </div>
+        <Link
+          href="/sub-invoices"
+          className="text-sm text-gray-500"
+        >
+          ← Invoices
+        </Link>
+
+        <div className="mt-6 rounded-xl bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-bold">
+            Invoice Not Found
+          </h1>
+
+          <p className="mt-2 text-gray-500">
+            {error || "This Invoice could not be found."}
+          </p>
+
+          <p className="mt-4 text-sm text-gray-400">
+            Document ID: {invoiceId}
+          </p>
         </div>
       </div>
     );
   }
 
   // ==========================================================
-  // 8. Page UI
+  // 12. Reusable field
   // ==========================================================
+
+  function renderField(
+    label,
+    value,
+    onChange,
+    multiline = false
+  ) {
+    return (
+      <div>
+        <label className="mb-1 block text-sm font-medium text-gray-700">
+          {label}
+        </label>
+
+        {editing ? (
+          multiline ? (
+            <textarea
+              value={value || ""}
+              onChange={(e) => onChange(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          ) : (
+            <input
+              value={value || ""}
+              onChange={(e) => onChange(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          )
+        ) : (
+          <p className="whitespace-pre-wrap rounded-lg bg-gray-50 px-3 py-2 text-sm">
+            {value || "-"}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // ==========================================================
+  // 13. Page UI
+  // ==========================================================
+
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-8">
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <Link href="/sub-invoices" className="text-sm text-gray-500 hover:text-black">
+            <Link
+              href="/sub-invoices"
+              className="text-sm text-gray-500 hover:text-black"
+            >
               ← Invoices
             </Link>
+
             <h1 className="mt-3 text-3xl font-bold">
               {form.invoiceNumber || "Sub-Invoice"}
             </h1>
+
             <p className="mt-1 text-sm text-gray-500">
               Invoice ID: {invoice.id}
             </p>
@@ -470,7 +939,7 @@ export default function SubInvoiceDetailPage() {
                   setEditing(true);
                   setSaved(false);
                 }}
-                className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-400 hover:text-black"
               >
                 Edit
               </button>
@@ -480,15 +949,16 @@ export default function SubInvoiceDetailPage() {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm"
                 >
                   Cancel
                 </button>
+
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white hover:bg-amber-400 hover:text-black disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
@@ -502,6 +972,7 @@ export default function SubInvoiceDetailPage() {
             Invoice changes saved successfully.
           </div>
         )}
+
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -509,112 +980,201 @@ export default function SubInvoiceDetailPage() {
         )}
 
         {/* Invoice Information */}
-        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-lg font-semibold text-gray-900">Invoice Information</h2>
+        <section className="mb-6 rounded-xl border bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-lg font-semibold">
+            Invoice Information
+          </h2>
+
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Invoice Number</label>
-              {editing ? (
-                <input
-                  value={form.invoiceNumber}
-                  onChange={(e) => updateForm("invoiceNumber", e.target.value)}
-                  placeholder="INV-0001"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
-                />
-              ) : (
-                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">{form.invoiceNumber || "-"}</p>
-              )}
-            </div>
+            {renderField(
+              "Invoice Number",
+              form.invoiceNumber,
+              (v) => updateForm("invoiceNumber", v)
+            )}
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
+              <label className="mb-1 block text-sm font-medium">
+                Status
+              </label>
+
               {editing ? (
                 <select
                   value={form.status}
-                  onChange={(e) => updateForm("status", e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-black"
+                  onChange={(e) =>
+                    updateForm("status", e.target.value)
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="Draft">Draft</option>
-                  <option value="Issued">Issued</option>
-                  <option value="Paid">Paid</option>
-                  <option value="Overdue">Overdue</option>
-                  <option value="Cancelled">Cancelled</option>
+                  {[
+                    "Draft",
+                    "Issued",
+                    "Paid",
+                    "Overdue",
+                    "Cancelled",
+                  ].map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
                 </select>
               ) : (
-                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">{form.status || "-"}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                  {form.status}
+                </p>
               )}
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Invoice Date</label>
+              <label className="mb-1 block text-sm font-medium">
+                Invoice Date
+              </label>
+
               {editing ? (
                 <input
                   type="date"
                   value={form.invoiceDate}
-                  onChange={(e) => updateForm("invoiceDate", e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  onChange={(e) =>
+                    handleInvoiceDateChange(e.target.value)
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               ) : (
-                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">{form.invoiceDate || "-"}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                  {form.invoiceDate || "-"}
+                </p>
               )}
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Due Date</label>
+              <label className="mb-1 block text-sm font-medium">
+                Due Date
+              </label>
+
               {editing ? (
                 <input
                   type="date"
                   value={form.dueDate}
-                  onChange={(e) => updateForm("dueDate", e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+                  onChange={(e) =>
+                    updateForm("dueDate", e.target.value)
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               ) : (
-                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">{form.dueDate || "-"}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                  {form.dueDate || "-"}
+                </p>
               )}
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">PO Number</label>
-              {editing ? (
-                loadingPOs ? (
-                  <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">Loading PO Numbers...</p>
-                ) : purchaseOrders.length > 0 ? (
-                  <select
-                    value={form.purchaseOrderId}
-                    onChange={(e) => handlePurchaseOrderChange(e.target.value)}
-                    className="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-black"
-                  >
-                    <option value="">Select PO Number</option>
-                    {purchaseOrders.map((order) => (
-                      <option key={order.id} value={order.id}>{order.poNumber}</option>
-                    ))}
-                    {form.purchaseOrderId === "" && form.poNumber && !purchaseOrders.some((order) => order.poNumber === form.poNumber) && (
-                      <option value="">Current PO: {form.poNumber} (not found in purchaseOrders)</option>
-                    )}
-                  </select>
-                ) : (
-                  <div>
-                    <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">No PO Numbers found.</p>
-                    {form.poNumber && <p className="mt-1 text-sm text-gray-600">Saved PO Number: {form.poNumber}</p>}
-                  </div>
-                )
+              <label className="mb-1 block text-sm font-medium">
+                PO Number
+              </label>
+
+              {editing && !loadingPOs ? (
+                <select
+                  value={form.purchaseOrderId}
+                  onChange={(e) =>
+                    handlePurchaseOrderChange(e.target.value)
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">Select PO Number</option>
+
+                  {purchaseOrders.map((order) => (
+                    <option key={order.id} value={order.id}>
+                      {order.poNumber}
+                    </option>
+                  ))}
+                </select>
+              ) : editing && loadingPOs ? (
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                  Loading Purchase Orders...
+                </p>
               ) : (
-                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">{form.poNumber || "-"}</p>
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                  {form.poNumber || "-"}
+                </p>
               )}
-              {editing && poLoadError && <p className="mt-1 text-sm text-red-600">{poLoadError}</p>}
+
+              {editing && poLoadError && (
+                <p className="mt-1 text-sm text-red-600">
+                  {poLoadError}
+                </p>
+              )}
             </div>
           </div>
         </section>
 
+        {/* Send From */}
+        <section className="mb-6 rounded-xl border bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-lg font-semibold">
+            Send From
+          </h2>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {[
+              ["Company Name", "name"],
+              ["ABN", "abn"],
+              ["Contact", "contact"],
+              ["Email", "email"],
+              ["Phone", "phone"],
+              ["Address", "address"],
+              ["Account Name", "accountName"],
+              ["BSB", "BSB"],
+              ["Account Number", "bankAccount"],
+            ].map(([label, field]) => (
+              <div key={field}>
+                {renderField(
+                  label,
+                  supplier[field],
+                  (value) => updateSupplier(field, value)
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Project Information */}
+        <section className="mb-6 rounded-xl border bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-lg font-semibold">
+            Project Information
+          </h2>
+
+          <div className="space-y-4">
+            {renderField(
+              "Project",
+              form.projectName,
+              (v) => updateForm("projectName", v)
+            )}
+
+            {renderField(
+              "Site Address",
+              form.siteAddress,
+              (v) => updateForm("siteAddress", v)
+            )}
+
+            {renderField(
+              "Scope of Work",
+              form.scopeOfWork,
+              (v) => updateForm("scopeOfWork", v),
+              true
+            )}
+          </div>
+        </section>
+
         {/* Invoice Items */}
-        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">Invoice Items</h2>
+        <section className="mb-6 rounded-xl border bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">
+              Invoice Items
+            </h2>
+
             {editing && (
               <button
                 type="button"
                 onClick={addItem}
-                className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
+                className="rounded-lg bg-indigo-800 px-4 py-2 text-sm text-white"
               >
                 + Add Item
               </button>
@@ -624,44 +1184,62 @@ export default function SubInvoiceDetailPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left">
-                  <th className="pb-3 pr-3 font-medium text-gray-600">Description</th>
-                  <th className="w-24 pb-3 pr-3 font-medium text-gray-600">Qty</th>
-                  <th className="w-36 pb-3 pr-3 font-medium text-gray-600">Unit Price</th>
-                  <th className="w-24 pb-3 pr-3 font-medium text-gray-600">Tax %</th>
-                  <th className="w-36 pb-3 pr-3 font-medium text-gray-600">Total</th>
-                  {editing && <th className="w-20 pb-3 font-medium text-gray-600"></th>}
+                <tr className="border-b text-left">
+                  <th className="pb-3 pr-3">Description</th>
+                  <th className="w-24 pb-3 pr-3">Qty</th>
+                  <th className="w-36 pb-3 pr-3">Unit Price</th>
+                  <th className="w-24 pb-3 pr-3">Tax %</th>
+                  <th className="w-36 pb-3 pr-3">Total</th>
+                  {editing && (
+                    <th className="w-20 pb-3"></th>
+                  )}
                 </tr>
               </thead>
+
               <tbody>
                 {calculatedItems.map((item, index) => (
-                  <tr key={index} className="border-b border-gray-100">
+                  <tr
+                    key={index}
+                    className="border-b border-gray-100"
+                  >
                     <td className="py-3 pr-3">
                       {editing ? (
                         <input
                           value={item.description}
-                          onChange={(e) => updateItem(index, "description", e.target.value)}
-                          placeholder="Description"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) =>
+                            updateItem(
+                              index,
+                              "description",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border px-3 py-2"
                         />
                       ) : (
-                        <span>{item.description || "-"}</span>
+                        item.description || "-"
                       )}
                     </td>
+
                     <td className="py-3 pr-3">
                       {editing ? (
                         <input
                           type="number"
                           min="0"
-                          step="1"
                           value={item.qty}
-                          onChange={(e) => updateItem(index, "qty", e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) =>
+                            updateItem(
+                              index,
+                              "qty",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border px-3 py-2"
                         />
                       ) : (
-                        <span>{item.qty}</span>
+                        item.qty
                       )}
                     </td>
+
                     <td className="py-3 pr-3">
                       {editing ? (
                         <input
@@ -669,13 +1247,20 @@ export default function SubInvoiceDetailPage() {
                           min="0"
                           step="0.01"
                           value={item.unitPrice}
-                          onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) =>
+                            updateItem(
+                              index,
+                              "unitPrice",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border px-3 py-2"
                         />
                       ) : (
-                        <span>${money(item.unitPrice)}</span>
+                        `$${money(item.unitPrice)}`
                       )}
                     </td>
+
                     <td className="py-3 pr-3">
                       {editing ? (
                         <input
@@ -683,18 +1268,32 @@ export default function SubInvoiceDetailPage() {
                           min="0"
                           step="0.1"
                           value={item.tax}
-                          onChange={(e) => updateItem(index, "tax", e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-black"
+                          onChange={(e) =>
+                            updateItem(
+                              index,
+                              "tax",
+                              e.target.value
+                            )
+                          }
+                          className="w-full rounded-lg border px-3 py-2"
                         />
                       ) : (
-                        <span>{item.tax}%</span>
+                        `${item.tax}%`
                       )}
                     </td>
-                    <td className="py-3 pr-3 font-medium">${money(item.total)}</td>
+
+                    <td className="py-3 pr-3 font-medium">
+                      ${money(item.total)}
+                    </td>
+
                     {editing && (
                       <td className="py-3">
                         {form.items.length > 1 && (
-                          <button type="button" onClick={() => removeItem(index)} className="text-sm text-red-600 hover:text-red-800">
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="text-red-600"
+                          >
                             Remove
                           </button>
                         )}
@@ -709,87 +1308,75 @@ export default function SubInvoiceDetailPage() {
           <div className="mt-6 flex justify-end">
             <div className="w-full max-w-sm space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">${money(subtotal)}</span>
+                <span>Subtotal</span>
+                <span>${money(subtotal)}</span>
               </div>
+
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">GST (10%)</span>
-                <span className="font-medium">${money(gst)}</span>
+                <span>GST (10%)</span>
+                <span>${money(gst)}</span>
               </div>
-              <div className="border-t border-gray-200 pt-3">
-                <div className="flex justify-between text-lg font-semibold">
-                  <span>Total</span>
-                  <span>${money(total)}</span>
-                </div>
+
+              <div className="flex justify-between border-t pt-3 text-lg font-semibold">
+                <span>Total</span>
+                <span>${money(total)}</span>
               </div>
             </div>
           </div>
         </section>
 
         {/* Notes */}
-        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-lg font-semibold text-gray-900">Notes</h2>
+        <section className="mb-6 rounded-xl border bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-lg font-semibold">
+            Notes
+          </h2>
+
           {editing ? (
             <textarea
               value={form.notes}
-              onChange={(e) => updateForm("notes", e.target.value)}
-              rows={5}
-              placeholder="Payment instructions, additional notes, etc."
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+              onChange={(e) =>
+                updateForm("notes", e.target.value)
+              }
+              rows={4}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
           ) : (
-            <p className="whitespace-pre-wrap text-sm text-gray-700">{form.notes || "-"}</p>
+            <p className="whitespace-pre-wrap text-sm">
+              {form.notes || "-"}
+            </p>
           )}
         </section>
 
-        {/* YJ Contact */}
-        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-lg font-semibold text-gray-900">YJ Contact</h2>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Contact Name</label>
-              {editing ? (
-                <input
-                  value={form.accountManager}
-                  onChange={(e) => updateForm("accountManager", e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
-                />
-              ) : (
-                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">{form.accountManager || "-"}</p>
-              )}
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Contact Email</label>
-              {editing ? (
-                <input
-                  type="email"
-                  value={form.accountManagerEmail}
-                  onChange={(e) => updateForm("accountManagerEmail", e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
-                />
-              ) : (
-                <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm">{form.accountManagerEmail || "-"}</p>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* PDF Preview and Download */}
+        {/* PDF Preview */}
         {!editing && (
-          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-gray-900">-Invoice PDF</h2>
+          <section className="rounded-xl border bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                Invoice PDF
+              </h2>
+
               <PDFDownloadLink
-                document={<InvoicePDF invoice={pdfData} />}
-                fileName={`${form.invoiceNumber || "newinvoice"}.pdf`}
-                className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
+                document={
+                  <SubinvoicePDF invoice={pdfData} />
+                }
+                fileName={`${form.invoiceNumber || "invoice"}.pdf`}
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white"
               >
-                {({ loading: pdfLoading }) => pdfLoading ? "Preparing PDF..." : "Download PDF"}
+                {({ loading: pdfLoading }) =>
+                  pdfLoading
+                    ? "Preparing PDF..."
+                    : "Download PDF"
+                }
               </PDFDownloadLink>
             </div>
-            <div className="overflow-hidden rounded-lg border border-gray-200">
-              <PDFViewer width="100%" height={800} showToolbar>
-                <InvoicePDF invoice={pdfData} />
+
+            <div className="overflow-hidden rounded-lg border">
+              <PDFViewer
+                width="100%"
+                height={800}
+                showToolbar
+              >
+                <SubinvoicePDF invoice={pdfData} />
               </PDFViewer>
             </div>
           </section>
