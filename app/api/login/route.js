@@ -1,18 +1,11 @@
-
 import { NextResponse } from "next/server";
 import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
-// ============================================================
-// Firebase Login API
-// 1. 接收 Firebase Authentication 的 ID Token
-// 2. 由 Firebase Admin 验证用户身份
-// 3. 创建服务端 Session Cookie
-// 4. 清除旧版不安全的登录 Cookie
-// ============================================================
-
 export const runtime = "nodejs";
 
-const SESSION_EXPIRES_IN = 5 * 24 * 60 * 60 * 1000; // 5 days
+const SESSION_EXPIRES_IN = 5 * 24 * 60 * 60 * 1000;
+
+const VALID_ROLES = ["admin", "yjpo", "yjest"];
 
 export async function POST(request) {
   try {
@@ -26,25 +19,64 @@ export async function POST(request) {
       );
     }
 
+    // ========================================================
     // 1. Initialize Firebase Admin
+    // ========================================================
+
     const { adminAuth } = getFirebaseAdminServices();
 
-    // 2. Verify the Firebase ID Token
+    // ========================================================
+    // 2. Verify Firebase ID Token
+    // ========================================================
+
     const decodedToken = await adminAuth.verifyIdToken(
       idToken,
       true
     );
 
-    // 3. Create a server-side session cookie
+    // ========================================================
+    // 3. Validate Firebase Custom Claims
+    // ========================================================
+
+    const role = decodedToken.role;
+
+    if (
+      typeof role !== "string" ||
+      !VALID_ROLES.includes(role)
+    ) {
+      console.warn("[Login] Account has no valid CRM role:", {
+        uid: decodedToken.uid,
+        role: role ?? null,
+      });
+
+      return NextResponse.json(
+        {
+          error:
+            "This account does not have a valid CRM role. Contact your administrator.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // ========================================================
+    // 4. Create Firebase Session Cookie
+    // ========================================================
+
     const sessionCookie = await adminAuth.createSessionCookie(
       idToken,
-      { expiresIn: SESSION_EXPIRES_IN }
+      {
+        expiresIn: SESSION_EXPIRES_IN,
+      }
     );
 
-    // 4. Return success and set the secure session cookie
+    // ========================================================
+    // 5. Set Session Cookie
+    // ========================================================
+
     const response = NextResponse.json({
       success: true,
       uid: decodedToken.uid,
+      role,
     });
 
     response.cookies.set({
@@ -57,6 +89,22 @@ export async function POST(request) {
       maxAge: SESSION_EXPIRES_IN / 1000,
     });
 
+    // Remove legacy session cookie.
+    response.cookies.set({
+      name: "yj_session",
+      value: "",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+
+    console.info("[Login] Session created:", {
+      uid: decodedToken.uid,
+      role,
+    });
+
     return response;
   } catch (error) {
     console.error("[Login] Firebase session creation failed:", {
@@ -64,20 +112,22 @@ export async function POST(request) {
       message: error?.message,
     });
 
-    // Invalid or expired Firebase ID Token
     if (
       typeof error?.code === "string" &&
       error.code.startsWith("auth/")
     ) {
       return NextResponse.json(
-        { error: "Firebase authentication failed. Please sign in again." },
+        {
+          error: "Firebase authentication failed. Please sign in again.",
+        },
         { status: 401 }
       );
     }
 
-    // Server credential, WIF, or Firebase Admin configuration error
     return NextResponse.json(
-      { error: "Server authentication is temporarily unavailable." },
+      {
+        error: "Server authentication is temporarily unavailable.",
+      },
       { status: 500 }
     );
   }
