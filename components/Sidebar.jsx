@@ -2,10 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 
 const menuItems = [
   { name: "Dashboard", href: "/", icon: "▦" },
@@ -22,17 +20,84 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
-  // Firebase current user UID
   const [uid, setUid] = useState("");
+  const [role, setRole] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
+  // ============================================================
+  // Get authenticated user from server-side session cookie
+  // ============================================================
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUid(user?.uid || "");
-    });
+    let active = true;
 
-    return () => unsubscribe();
+    async function getCurrentUser() {
+      try {
+        const response = await fetch("/api/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (!active) return;
+
+        if (!response.ok || !data.authenticated) {
+          setUid("");
+          setRole("");
+          setError("Not signed in");
+          return;
+        }
+
+        setUid(data.uid || "");
+        setRole(data.role || "");
+        setError("");
+
+      } catch (err) {
+        console.error("Get current user error:", err);
+
+        if (active) {
+          setError("Unable to get user information");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    getCurrentUser();
+
+    return () => {
+      active = false;
+    };
   }, []);
+
+  // ============================================================
+  // Logout
+  // ============================================================
+  async function handleLogout() {
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Logout failed");
+      }
+
+      router.replace("/login");
+      router.refresh();
+
+    } catch (err) {
+      console.error("Logout error:", err);
+      alert("Unable to logout. Please try again.");
+    }
+  }
 
   return (
     <aside className="w-64 bg-indigo-800 border-r border-gray-200 min-h-screen flex flex-col shrink-0">
@@ -81,12 +146,12 @@ export default function Sidebar() {
 
       {/* Logout */}
       <div className="flex items-center gap-3 mb-4 px-6">
-        <Link
-          href="/login"
+        <button
+          onClick={handleLogout}
           className="rounded-lg bg-indigo-800 px-5 py-2.5 border border-gray-200 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
         >
           Logout
-        </Link>
+        </button>
       </div>
 
       {/* User Information */}
@@ -103,7 +168,7 @@ export default function Sidebar() {
             </div>
 
             <div className="text-xs text-gray-400 truncate">
-              Administration
+              {role || "Administration"}
             </div>
           </div>
 
@@ -116,7 +181,20 @@ export default function Sidebar() {
           </div>
 
           <div className="text-xs text-amber-300 break-all select-all leading-relaxed">
-            {uid || "Not signed in"}
+            {loading
+              ? "Loading..."
+              : uid || error || "Not signed in"}
+          </div>
+        </div>
+
+        {/* User Role */}
+        <div className="mt-3">
+          <div className="text-xs font-semibold text-gray-400 mb-1">
+            CRM Role
+          </div>
+
+          <div className="text-xs text-green-300">
+            {loading ? "Loading..." : role || "No role"}
           </div>
         </div>
 
