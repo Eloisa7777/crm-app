@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic"; //实时处理请求，不能只作为静态》》1. Read session cookie
+export const dynamic = "force-dynamic";
 
 const VALID_ROLES = [
   "admin",
@@ -13,13 +13,18 @@ const VALID_ROLES = [
   "subsup",
 ];
 
+const SESSION_COOKIE_NAME = "yj_session";
+
 export async function GET() {
   try {
+    // ========================================================
     // 1. Read session cookie
+    // ========================================================
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("yj_session")?.value;
 
-    console.log("[API ME] Session exists:", !!sessionCookie);
+    const sessionCookie = cookieStore.get(
+      SESSION_COOKIE_NAME
+    )?.value;
 
     if (!sessionCookie) {
       return NextResponse.json(
@@ -28,29 +33,73 @@ export async function GET() {
           stage: "cookie",
           error: "No session found",
         },
-        { status: 401 }
+        {
+          status: 401,
+          headers: { "Cache-Control": "no-store" },
+        }
       );
     }
 
+    // ========================================================
     // 2. Initialize Firebase Admin
-    const { adminAuth } = getFirebaseAdminServices();
+    // ========================================================
+    const { adminAuth, adminDb } =
+      getFirebaseAdminServices();
 
-    console.log("[API ME] Firebase Admin initialized");
-
-    // 3. Verify session
+    // ========================================================
+    // 3. Verify Firebase Session Cookie
+    // ========================================================
     const decodedToken =
       await adminAuth.verifySessionCookie(
         sessionCookie,
         true
       );
 
-    console.log("[API ME] Session verified:", {
-      uid: decodedToken.uid,
-      role: decodedToken.role,
-    });
+    const uid = decodedToken.uid;
 
-    // 4. Validate role
-    const role = decodedToken.role;
+    console.log("[API ME] Session verified:", { uid });
+
+    // ========================================================
+    // 4. Read user RBAC from Firestore
+    // Collection: users
+    // Document: Firebase UID
+    // ========================================================
+    const userSnap = await adminDb
+      .collection("users")
+      .doc(uid)
+      .get();
+
+    if (!userSnap.exists) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          stage: "user",
+          error: "USER_NOT_REGISTERED",
+        },
+        { status: 403 }
+      );
+    }
+
+    const userData = userSnap.data();
+
+    // ========================================================
+    // 5. Check user status
+    // ========================================================
+    if (userData.Active !== true) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          stage: "user",
+          error: "USER_DISABLED",
+        },
+        { status: 403 }
+      );
+    }
+
+    // ========================================================
+    // 6. Read roleId from Firestore
+    // ========================================================
+    const role = userData.roleId;
 
     if (
       typeof role !== "string" ||
@@ -60,23 +109,69 @@ export async function GET() {
         {
           authenticated: false,
           stage: "role",
-          error: "Invalid CRM role",
+          error: "INVALID_USER_ROLE",
         },
         { status: 403 }
       );
     }
 
-    // 5. Return user information
+    // ========================================================
+    // 7. Verify role document
+    // Collection: roles
+    // Document: roleId
+    // ========================================================
+    const roleSnap = await adminDb
+      .collection("roles")
+      .doc(role)
+      .get();
+
+    if (!roleSnap.exists) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          stage: "role",
+          error: "ROLE_NOT_FOUND",
+        },
+        { status: 403 }
+      );
+    }
+
+    const roleData = roleSnap.data();
+
+    if (
+      roleData.active === false ||
+      roleData.Active === false
+    ) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          stage: "role",
+          error: "ROLE_DISABLED",
+        },
+        { status: 403 }
+      );
+    }
+
+    // ========================================================
+    // 8. Authentication successful
+    // ========================================================
+    console.log("[API ME] Authentication successful:", {
+      uid,
+      role,
+    });
+
     return NextResponse.json(
       {
         authenticated: true,
-        uid: decodedToken.uid,
-        email: decodedToken.email || "",
+        uid,
+        email: decodedToken.email || userData.email || "",
         role,
       },
       {
+        status: 200,
         headers: {
-          "Cache-Control": "no-store",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          Pragma: "no-cache",
         },
       }
     );
@@ -94,7 +189,12 @@ export async function GET() {
         error: error?.code || "SESSION_VERIFICATION_FAILED",
         message: error?.message || "Unknown error",
       },
-      { status: 401 }
+      {
+        status: 401,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
     );
   }
 }
