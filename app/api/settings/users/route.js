@@ -1,14 +1,14 @@
 
 import { NextResponse } from "next/server";
 
-import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 import { requireSuperAdmin } from "@/lib/requireSuperAdmin";
 
 // ============================================================
 // GET /api/settings/users
 //
 // Authentication:
-//   UID + Email
+//   Firebase Authentication -> UID + Email
 //
 // Firestore:
 //   users/{uid} -> displayName
@@ -33,7 +33,13 @@ export async function GET(request) {
     }
 
     // --------------------------------------------------------
-    // 2. 获取分页参数
+    // 2. 初始化 Firebase Admin Services
+    // --------------------------------------------------------
+
+    const { adminAuth, adminDb } = getFirebaseAdminServices();
+
+    // --------------------------------------------------------
+    // 3. 获取分页参数
     // --------------------------------------------------------
 
     const { searchParams } = new URL(request.url);
@@ -41,18 +47,15 @@ export async function GET(request) {
     const pageToken = searchParams.get("pageToken") || undefined;
 
     // --------------------------------------------------------
-    // 3. 获取 Firebase Authentication 用户
+    // 4. 获取 Firebase Authentication 用户
     // --------------------------------------------------------
 
-    const authResult = await adminAuth.listUsers(
-      1000,
-      pageToken
-    );
+    const authResult = await adminAuth.listUsers(1000, pageToken);
 
     const authUsers = authResult.users;
 
     // --------------------------------------------------------
-    // 4. 根据 UID 获取 Firestore users 文档
+    // 5. 根据 UID 获取 Firestore users 文档
     // --------------------------------------------------------
 
     let firestoreUsers = [];
@@ -74,7 +77,7 @@ export async function GET(request) {
     }
 
     // --------------------------------------------------------
-    // 5. 合并 Authentication + Firestore 数据
+    // 6. 合并 Authentication + Firestore 数据
     // --------------------------------------------------------
 
     const users = authUsers.map((authUser, index) => {
@@ -82,40 +85,32 @@ export async function GET(request) {
 
       return {
         uid: authUser.uid,
-
         email: authUser.email || "",
-
         displayName: firestoreUser.displayName || "",
-
       };
     });
 
     // --------------------------------------------------------
-    // 6. 返回数据
+    // 7. 返回数据
     // --------------------------------------------------------
 
     return NextResponse.json(
       {
         success: true,
-
         users,
-
         pagination: {
           hasMore: Boolean(authResult.pageToken),
           nextPageToken: authResult.pageToken || null,
         },
-
         totalReturned: users.length,
       },
       {
         status: 200,
-
         headers: {
           "Cache-Control": "private, no-store",
         },
       }
     );
-
   } catch (error) {
     console.error("[Settings Users API]", error);
 
