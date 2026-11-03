@@ -3,71 +3,257 @@ import { NextResponse } from "next/server";
 import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// ============================================================
+// 1. Session Configuration
+// ============================================================
 
 // Session expires after 4 hours.
 const SESSION_EXPIRES_IN = 4 * 60 * 60 * 1000;
 
-// All valid CRM roles.
-const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup"];
-
 // Unified CRM session cookie name.
 const SESSION_COOKIE_NAME = "yj_session";
 
+// ============================================================
+// 2. POST /api/login
+//
+// Authentication:
+//   Firebase Authentication ID Token
+//
+// RBAC:
+//   users/{uid}
+//     Active: true
+//     roleId: "admin"
+//
+//   roles/{roleId}
+//     rolename: "admin"
+//     permissions: { ... }
+//
+// No Firebase Custom Claims required.
+// ============================================================
+
 export async function POST(request) {
   try {
+    // --------------------------------------------------------
+    // 1. Read request body
+    // --------------------------------------------------------
+
     const body = await request.json();
     const idToken = body?.idToken;
 
-    if (typeof idToken !== "string" || !idToken.trim()) {
+    if (
+      typeof idToken !== "string" ||
+      !idToken.trim()
+    ) {
       return NextResponse.json(
-        { error: "Missing Firebase ID token" },
+        {
+          success: false,
+          error: "MISSING_ID_TOKEN",
+        },
         { status: 400 }
       );
     }
 
-    // 1. Initialize Firebase Admin.
-    const { adminAuth } = getFirebaseAdminServices();
+    // --------------------------------------------------------
+    // 2. Initialize Firebase Admin Services
+    // --------------------------------------------------------
 
-    // 2. Verify Firebase ID token.
+    const { adminAuth, adminDb } =
+      getFirebaseAdminServices();
+
+    // --------------------------------------------------------
+    // 3. Verify Firebase ID Token
+    //
+    // This verifies identity only.
+    // Role is NOT read from Custom Claims.
+    // --------------------------------------------------------
+
     const decodedToken = await adminAuth.verifyIdToken(
       idToken,
       true
     );
 
-    // 3. Validate Firebase custom claims.
-    const role = decodedToken.role;
+    const uid = decodedToken.uid;
 
-    if (
-      typeof role !== "string" ||
-      !VALID_ROLES.includes(role)
-    ) {
-      console.warn("[Login] Invalid CRM role:", {
-        uid: decodedToken.uid,
-        role: role ?? null,
-      });
+    if (!uid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "INVALID_USER_ID",
+        },
+        { status: 401 }
+      );
+    }
+
+    // --------------------------------------------------------
+    // 4. Get Firestore User Document
+    //
+    // Collection: users
+    // Document: Firebase UID
+    // --------------------------------------------------------
+
+    const userSnapshot = await adminDb
+      .collection("users")
+      .doc(uid)
+      .get();
+
+    if (!userSnapshot.exists) {
+      console.warn("[Login] User document not found:", uid);
 
       return NextResponse.json(
         {
-          error:
-            "This account does not have a valid CRM role. Contact your administrator.",
+          success: false,
+          error: "USER_NOT_FOUND",
+          message: "CRM user profile does not exist.",
         },
         { status: 403 }
       );
     }
 
-    // 4. Create Firebase session cookie.
-    const sessionCookie = await adminAuth.createSessionCookie(
-      idToken,
-      {
-        expiresIn: SESSION_EXPIRES_IN,
-      }
-    );
+    const userData = userSnapshot.data() || {};
 
-    // 5. Return login result and set session cookie.
+    // --------------------------------------------------------
+    // 5. Check User Active Status
+    //
+    // Actual Firestore field: Active
+    // Expected value: true
+    // --------------------------------------------------------
+
+    if (userData.Active !== true) {
+      console.warn("[Login] Inactive CRM user:", uid);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "USER_INACTIVE",
+          message: "This CRM account is inactive.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // --------------------------------------------------------
+    // 6. Get Role ID
+    //
+    // Actual Firestore field: roleId
+    // Example: admin
+    // --------------------------------------------------------
+
+    const roleId = userData.roleId;
+
+    if (
+      typeof roleId !== "string" ||
+      !roleId.trim()
+    ) {
+      console.warn("[Login] Missing roleId:", uid);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "MISSING_ROLE",
+          message: "No CRM role has been assigned.",
+        },
+        { status: 403 }
+      );
+    }
+
+    // --------------------------------------------------------
+    // 7. Get Role Document
+    //
+    // Collection: roles
+    // Document: roleId
+    // Example: roles/admin
+    // --------------------------------------------------------
+
+    const roleSnapshot = await adminDb
+      .collection("roles")
+      .doc(roleId)
+      .get();
+
+    if (!roleSnapshot.exists) {
+      console.warn("[Login] Role not found:", {
+        uid,
+        roleId,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ROLE_NOT_FOUND",
+          message: "Assigned CRM role does not exist.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const roleData = roleSnapshot.data() || {};
+
+    // --------------------------------------------------------
+    // 8. Validate Role Name
+    // --------------------------------------------------------
+
+    if (
+      typeof roleData.rolename !== "string" ||
+      roleData.rolename.toLowerCase() !==
+        roleId.toLowerCase()
+    ) {
+      console.warn("[Login] Invalid role document:", {
+        uid,
+        roleId,
+        rolename: roleData.rolename ?? null,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "INVALID_ROLE",
+        },
+        { status: 403 }
+      );
+    }
+
+    // --------------------------------------------------------
+    // 9. Validate Permissions
+    // --------------------------------------------------------
+
+    if (
+      !roleData.permissions ||
+      typeof roleData.permissions !== "object"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "INVALID_ROLE_PERMISSIONS",
+        },
+        { status: 403 }
+      );
+    }
+
+    // --------------------------------------------------------
+    // 10. Create Firebase Session Cookie
+    //
+    // Cookie contains Firebase identity.
+    // CRM role remains in Firestore.
+    // --------------------------------------------------------
+
+    const sessionCookie =
+      await adminAuth.createSessionCookie(
+        idToken,
+        {
+          expiresIn: SESSION_EXPIRES_IN,
+        }
+      );
+
+    // --------------------------------------------------------
+    // 11. Return Login Result
+    // --------------------------------------------------------
+
     const response = NextResponse.json({
       success: true,
-      uid: decodedToken.uid,
-      role,
+      uid,
+      roleId,
+      displayName: userData.displayname || "",
     });
 
     response.cookies.set({
@@ -80,7 +266,10 @@ export async function POST(request) {
       maxAge: SESSION_EXPIRES_IN / 1000,
     });
 
-    // Remove old __session cookie.
+    // --------------------------------------------------------
+    // 12. Remove Old Session Cookie
+    // --------------------------------------------------------
+
     response.cookies.set({
       name: "__session",
       value: "",
@@ -91,18 +280,25 @@ export async function POST(request) {
       maxAge: 0,
     });
 
-    console.info("[Login] Session created:", {
-      uid: decodedToken.uid,
-      role,
+    // --------------------------------------------------------
+    // 13. Logging
+    // --------------------------------------------------------
+
+    console.info("[Login] Firestore RBAC session created:", {
+      uid,
+      roleId,
     });
 
     return response;
 
   } catch (error) {
-    console.error("[Login] Firebase session creation failed:", {
-      code: error?.code,
-      message: error?.message,
-    });
+    console.error(
+      "[Login] Firebase authentication failed:",
+      {
+        code: error?.code,
+        message: error?.message,
+      }
+    );
 
     if (
       typeof error?.code === "string" &&
@@ -110,7 +306,9 @@ export async function POST(request) {
     ) {
       return NextResponse.json(
         {
-          error: "Firebase authentication failed. Please sign in again.",
+          success: false,
+          error: "FIREBASE_AUTHENTICATION_FAILED",
+          message: "Please sign in again.",
         },
         { status: 401 }
       );
@@ -118,7 +316,9 @@ export async function POST(request) {
 
     return NextResponse.json(
       {
-        error: "Server authentication is temporarily unavailable.",
+        success: false,
+        error: "SERVER_AUTHENTICATION_FAILED",
+        message: "Server authentication is temporarily unavailable.",
       },
       { status: 500 }
     );
