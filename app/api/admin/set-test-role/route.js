@@ -9,11 +9,7 @@ export async function GET(request) {
   const expectedSecret = process.env.ROLE_SETUP_SECRET;
   const suppliedSecret = request.nextUrl.searchParams.get("secret");
 
-  if (
-    !expectedSecret ||
-    !suppliedSecret ||
-    suppliedSecret !== expectedSecret
-  ) {
+  if (!expectedSecret || suppliedSecret !== expectedSecret) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
@@ -23,31 +19,27 @@ export async function GET(request) {
   try {
     const { adminAuth } = getFirebaseAdminServices();
 
+    // 删除该用户全部 Custom Claims
+    await adminAuth.setCustomUserClaims(TEST_UID, {});
+
+    // 撤销已有 Refresh Tokens
+    await adminAuth.revokeRefreshTokens(TEST_UID);
+
+    // 重新读取验证
     const user = await adminAuth.getUser(TEST_UID);
-
-    // 保留其他 Custom Claims，只删除 role
-    const { role, ...remainingClaims } = user.customClaims || {};
-
-    await adminAuth.setCustomUserClaims(
-      TEST_UID,
-      remainingClaims
-    );
 
     return NextResponse.json({
       success: true,
       uid: TEST_UID,
-      previousRole: role || null,
-      message: "Role claim removed successfully.",
+      customClaims: user.customClaims || {},
+      message: "All custom claims cleared.",
     });
 
   } catch (error) {
-    console.error("[Role Removal] Failed:", {
-      code: error?.code,
-      message: error?.message,
-    });
+    console.error(error);
 
     return NextResponse.json(
-      { error: "Failed to remove role" },
+      { error: error.message },
       { status: 500 }
     );
   }
