@@ -1,15 +1,23 @@
+
 "use client";
 
 // ============================================================
 // Sub-Invoice - Detail / Edit Page
-// Reads and updates Firestore collection: subInvoices.
-// PO access restricted to current user's own Issued POs.
+//
+// Authentication:
+// 1. Use /api/me to read verified server session (yj_session).
+// 2. Do not depend on Firebase client auth.currentUser.
+// 3. Only load the current user's Issued POs.
+// 4. Verify invoice ownership before displaying/editing.
+// 5. Re-verify PO ownership and status before saving.
+//
+// Firestore collection: subInvoices
 // ============================================================
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
+
 import {
   collection,
   doc,
@@ -18,9 +26,10 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 
-import { auth, db } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import SubinvoicePDF from "@/components/SubinvoicePDF";
 
 // ============================================================
@@ -31,6 +40,7 @@ function localDate(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
+
   return `${year}-${month}-${day}`;
 }
 
@@ -38,6 +48,7 @@ function addDaysToDate(dateString, days = 20) {
   if (!dateString) return "";
 
   const [year, month, day] = dateString.split("-").map(Number);
+
   const date = new Date(year, month - 1, day);
   date.setDate(date.getDate() + days);
 
@@ -48,6 +59,7 @@ function generateInvoiceNumber(short, dateString) {
   if (!short || !dateString) return "";
 
   const [year, month, day] = dateString.split("-");
+
   return `INV-${String(short).trim()}${day}${month}${year.slice(-2)}`;
 }
 
@@ -65,6 +77,7 @@ const EMPTY_SUPPLIER = {
   contact: "",
   email: "",
   phone: "",
+  bankName: "",
   bankAccount: "",
   BSB: "",
   accountName: "",
@@ -80,6 +93,16 @@ const normaliseItems = (items) =>
       }))
     : [{ description: "", qty: 1, unitPrice: "", tax: 0 }];
 
+function getPONumber(data) {
+  return String(
+    data.poNumber ||
+      data.purchaseOrderNumber ||
+      data.orderNumber ||
+      data.number ||
+      ""
+  ).trim();
+}
+
 // ============================================================
 // 2. Component
 // ============================================================
@@ -88,6 +111,18 @@ export default function SubInvoiceDetailPage() {
   const params = useParams();
   const invoiceId = params?.id;
 
+  // ----------------------------------------------------------
+  // Verified server session
+  // ----------------------------------------------------------
+
+  const [sessionUser, setSessionUser] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [sessionError, setSessionError] = useState("");
+
+  // ----------------------------------------------------------
+  // Invoice state
+  // ----------------------------------------------------------
+
   const [invoice, setInvoice] = useState(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -95,11 +130,23 @@ export default function SubInvoiceDetailPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
+  // ----------------------------------------------------------
+  // Purchase Orders
+  // ----------------------------------------------------------
+
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [loadingPOs, setLoadingPOs] = useState(true);
   const [poLoadError, setPoLoadError] = useState("");
 
+  // ----------------------------------------------------------
+  // Supplier
+  // ----------------------------------------------------------
+
   const [supplier, setSupplier] = useState(EMPTY_SUPPLIER);
+
+  // ----------------------------------------------------------
+  // Form
+  // ----------------------------------------------------------
 
   const [form, setForm] = useState({
     invoiceNumber: "",
@@ -117,88 +164,149 @@ export default function SubInvoiceDetailPage() {
   });
 
   // ==========================================================
-  // 3. Load current user's Issued Purchase Orders
+  // 3. Load verified server session
+  //
+  // Reads UID and role from /api/me.
+  // /api/me verifies the HttpOnly yj_session cookie.
   // ==========================================================
 
   useEffect(() => {
     let active = true;
-    let unsubscribe;
 
-    async function loadPurchaseOrders(currentUser) {
+    async function loadSession() {
+      try {
+        setSessionLoading(true);
+        setSessionError("");
+
+        const response = await fetch("/api/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.authenticated || !data.uid) {
+          throw new Error(
+            data.error || "Your login session is invalid or expired."
+          );
+        }
+
+        if (!active) return;
+
+        setSessionUser({
+          uid: data.uid,
+          email: data.email || "",
+          role: data.role || "",
+        });
+      } catch (err) {
+        console.error("Failed to load CRM session:", err);
+
+        if (active) {
+          setSessionUser(null);
+          setSessionError(
+            err.message || "Unable to verify your login session."
+          );
+        }
+      } finally {
+        if (active) {
+          setSessionLoading(false);
+        }
+      }
+    }
+
+    loadSession();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // ==========================================================
+  // 4. Load current user's Issued Purchase Orders
+  //
+  // Only show POs where:
+  // 1. PO status === Issued
+  // 2. Supplier/Subcontractor UID === session UID
+  // 3. supplierType matches the correct collection
+  // ==========================================================
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadPurchaseOrders() {
+      if (!sessionUser?.uid) {
+        setPurchaseOrders([]);
+        setLoadingPOs(false);
+        return;
+      }
+
       try {
         setLoadingPOs(true);
         setPoLoadError("");
 
-        if (!currentUser) {
-          throw new Error("You must be logged in to load Purchase Orders.");
-        }
+        const currentUID = sessionUser.uid;
 
-        const currentUID = currentUser.uid;
+        const [
+          suppliersSnapshot,
+          subcontractorsSnapshot,
+          poSnapshot,
+        ] = await Promise.all([
+          getDocs(collection(db, "Suppliers")),
+          getDocs(collection(db, "Subcontractors")),
+          getDocs(collection(db, "purchaseOrders")),
+        ]);
 
-        // Load both Supplier and Subcontractor collections.
-        const [suppliersSnapshot, subcontractorsSnapshot, poSnapshot] =
-          await Promise.all([
-            getDocs(collection(db, "Suppliers")),
-            getDocs(collection(db, "Subcontractors")),
-            getDocs(collection(db, "purchaseOrders")),
-          ]);
+        if (!active) return;
 
-        // Only keep supplier documents belonging to current user.
+        // Supplier documents owned by current user.
         const ownSuppliers = new Set(
           suppliersSnapshot.docs
             .filter((supplierDoc) => {
               return supplierDoc.data().uid === currentUID;
             })
-            .map((supplierDoc) => `Supplier:${supplierDoc.id}`)
+            .map((supplierDoc) => supplierDoc.id)
         );
 
+        // Subcontractor documents owned by current user.
         const ownSubcontractors = new Set(
           subcontractorsSnapshot.docs
             .filter((supplierDoc) => {
               return supplierDoc.data().uid === currentUID;
             })
-            .map((supplierDoc) => `Subcontractor:${supplierDoc.id}`)
+            .map((supplierDoc) => supplierDoc.id)
         );
 
-        // Filter PO by:
-        // 1. status === "Issued"
-        // 2. supplierId belongs to current user's supplier document
-        // 3. supplierType matches the corresponding collection
-        // 4. PO number is not empty
         const orders = poSnapshot.docs
           .map((poDoc) => {
             const data = poDoc.data();
 
-            const poNumber =
-              data.poNumber ||
-              data.purchaseOrderNumber ||
-              data.orderNumber ||
-              data.number ||
-              "";
-
             return {
               id: poDoc.id,
               ...data,
-              poNumber: String(poNumber).trim(),
+              poNumber: getPONumber(data),
             };
           })
           .filter((order) => {
             if (order.status !== "Issued") return false;
-            if (!order.supplierId || !order.poNumber) return false;
 
-            if (order.supplierType === "Subcontractor") {
-              return ownSubcontractors.has(
-                `Subcontractor:${order.supplierId}`
-              );
+            if (!order.supplierId || !order.poNumber) {
+              return false;
             }
 
             if (order.supplierType === "Supplier") {
-              return ownSuppliers.has(`Supplier:${order.supplierId}`);
+              return ownSuppliers.has(order.supplierId);
+            }
+
+            if (order.supplierType === "Subcontractor") {
+              return ownSubcontractors.has(order.supplierId);
             }
 
             return false;
           })
-          .sort((a, b) => a.poNumber.localeCompare(b.poNumber));
+          .sort((a, b) =>
+            a.poNumber.localeCompare(b.poNumber)
+          );
 
         if (active) {
           setPurchaseOrders(orders);
@@ -218,32 +326,42 @@ export default function SubInvoiceDetailPage() {
       }
     }
 
-    // Wait for Firebase Auth to restore the current user.
-    unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (!currentUser) {
-        setPurchaseOrders([]);
-        setPoLoadError("You must be logged in to load Purchase Orders.");
-        setLoadingPOs(false);
-        return;
-      }
+    if (sessionLoading) return;
 
-      loadPurchaseOrders(currentUser);
-    });
+    if (!sessionUser?.uid) {
+      setPurchaseOrders([]);
+      setLoadingPOs(false);
+      return;
+    }
+
+    loadPurchaseOrders();
 
     return () => {
       active = false;
-      if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [sessionUser, sessionLoading]);
 
   // ==========================================================
-  // 4. Load current Sub-Invoice
+  // 5. Load current Sub-Invoice
+  //
+  // Ordinary users can only access their own invoices.
+  // Admin can access all invoices.
   // ==========================================================
 
   useEffect(() => {
     let active = true;
 
     async function loadSubInvoice() {
+      if (sessionLoading) return;
+
+      if (!sessionUser?.uid) {
+        setLoading(false);
+        setError(
+          sessionError || "Please log in to view this invoice."
+        );
+        return;
+      }
+
       if (!invoiceId) {
         setLoading(false);
         setError("Invoice ID is missing.");
@@ -259,7 +377,10 @@ export default function SubInvoiceDetailPage() {
         );
 
         if (!snapshot.exists()) {
-          if (active) setError("Invoice not found.");
+          if (active) {
+            setInvoice(null);
+            setError("Invoice not found.");
+          }
           return;
         }
 
@@ -270,6 +391,18 @@ export default function SubInvoiceDetailPage() {
 
         if (!active) return;
 
+        // Verify invoice ownership.
+        const isAdmin = sessionUser.role === "admin";
+        const isOwner = data.uid === sessionUser.uid;
+
+        if (!isAdmin && !isOwner) {
+          setInvoice(null);
+          setError(
+            "You do not have permission to access this invoice."
+          );
+          return;
+        }
+
         setInvoice(data);
 
         setSupplier({
@@ -278,6 +411,7 @@ export default function SubInvoiceDetailPage() {
           accountName:
             data.supplier?.accountName ||
             data.supplier?.bankName ||
+            data.supplier?.name ||
             "",
         });
 
@@ -302,7 +436,9 @@ export default function SubInvoiceDetailPage() {
           setError(err.message || "Failed to load Invoice.");
         }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
 
@@ -311,14 +447,18 @@ export default function SubInvoiceDetailPage() {
     return () => {
       active = false;
     };
-  }, [invoiceId]);
+  }, [invoiceId, sessionUser, sessionLoading, sessionError]);
+
+  // ==========================================================
+  // 6. Selected Purchase Order
+  // ==========================================================
 
   const selectedPurchaseOrder = purchaseOrders.find(
     (order) => order.id === form.purchaseOrderId
   );
 
   // ==========================================================
-  // 5. Form handlers
+  // 7. Form handlers
   // ==========================================================
 
   function updateForm(field, value) {
@@ -337,7 +477,7 @@ export default function SubInvoiceDetailPage() {
       dueDate: addDaysToDate(value, 20),
       invoiceNumber: supplier.short
         ? generateInvoiceNumber(supplier.short, value)
-        : "",
+        : previous.invoiceNumber,
     }));
 
     setSaved(false);
@@ -389,13 +529,13 @@ export default function SubInvoiceDetailPage() {
   }
 
   // ==========================================================
-  // 6. Verify PO ownership and status
+  // 8. Verify PO ownership and status
+  //
+  // Uses verified session UID, not Firebase client auth.
   // ==========================================================
 
   async function verifyPurchaseOrder(purchaseOrderId) {
-    const currentUser = auth.currentUser;
-
-    if (!currentUser) {
+    if (!sessionUser?.uid) {
       throw new Error("You must be logged in.");
     }
 
@@ -403,7 +543,6 @@ export default function SubInvoiceDetailPage() {
       throw new Error("Please select a Purchase Order.");
     }
 
-    // Read the latest PO document from Firestore.
     const poRef = doc(
       db,
       "purchaseOrders",
@@ -445,21 +584,22 @@ export default function SubInvoiceDetailPage() {
       throw new Error("Invalid Purchase Order supplierType.");
     }
 
-    // Read the linked Supplier/Subcontractor document.
     const supplierSnapshot = await getDoc(
       doc(db, collectionName, order.supplierId)
     );
 
     if (!supplierSnapshot.exists()) {
-      throw new Error(`${collectionName} document not found.`);
+      throw new Error(
+        `${collectionName} document not found.`
+      );
     }
 
     const supplierData = supplierSnapshot.data();
 
-    // Verify current Firebase Auth UID.
+    // Check linked supplier UID against verified session UID.
     if (
       !supplierData.uid ||
-      supplierData.uid !== currentUser.uid
+      supplierData.uid !== sessionUser.uid
     ) {
       throw new Error(
         "You do not have permission to access this Purchase Order."
@@ -467,14 +607,17 @@ export default function SubInvoiceDetailPage() {
     }
 
     return {
-      order,
+      order: {
+        ...order,
+        poNumber: getPONumber(order),
+      },
       supplierData,
       collectionName,
     };
   }
 
   // ==========================================================
-  // 7. Change PO and reload its linked information
+  // 9. Change PO and reload linked information
   // ==========================================================
 
   async function handlePurchaseOrderChange(purchaseOrderId) {
@@ -499,17 +642,8 @@ export default function SubInvoiceDetailPage() {
       setError("");
       setSaved(false);
 
-      const {
-        order,
-        supplierData,
-      } = await verifyPurchaseOrder(purchaseOrderId);
-
-      const poNumber =
-        order.poNumber ||
-        order.purchaseOrderNumber ||
-        order.orderNumber ||
-        order.number ||
-        "";
+      const { order, supplierData } =
+        await verifyPurchaseOrder(purchaseOrderId);
 
       const poItems = Array.isArray(order.items)
         ? order.items
@@ -523,9 +657,14 @@ export default function SubInvoiceDetailPage() {
         contact: order.supplier?.contact || "",
         email: order.supplier?.email || "",
         phone: order.supplier?.phone || "",
+        bankName: supplierData.bankName || "",
         bankAccount: supplierData.bankAccount || "",
         BSB: supplierData.BSB || "",
-        accountName: supplierData.bankName || "",
+        accountName:
+          supplierData.accountName ||
+          supplierData.bankName ||
+          supplierData.name ||
+          "",
       };
 
       setSupplier(nextSupplier);
@@ -533,11 +672,12 @@ export default function SubInvoiceDetailPage() {
       setForm((previous) => ({
         ...previous,
         purchaseOrderId: order.id,
-        poNumber: String(poNumber).trim(),
+        poNumber: order.poNumber,
         projectId: order.projectId || "",
         projectName: order.projectName || "",
         siteAddress: order.siteAddress || "",
         scopeOfWork: order.scopeOfWork || "",
+
         items: poItems.length
           ? poItems.map((item) => ({
               description: item.description || "",
@@ -554,13 +694,12 @@ export default function SubInvoiceDetailPage() {
               },
             ],
 
-        // If supplier short is empty, do not generate invoice number.
         invoiceNumber: nextSupplier.short
           ? generateInvoiceNumber(
               nextSupplier.short,
               previous.invoiceDate
             )
-          : "",
+          : previous.invoiceNumber,
       }));
     } catch (err) {
       console.error("Failed to reload Supplier:", err);
@@ -581,7 +720,7 @@ export default function SubInvoiceDetailPage() {
   }
 
   // ==========================================================
-  // 8. Calculations and PDF data
+  // 10. Calculations
   // ==========================================================
 
   const calculatedItems = useMemo(
@@ -614,6 +753,10 @@ export default function SubInvoiceDetailPage() {
   const gst = subtotal * 0.1;
   const total = subtotal + gst;
 
+  // ==========================================================
+  // 11. PDF data
+  // ==========================================================
+
   const pdfData = {
     id: invoice?.id || invoiceId || "",
     invoiceType: "sub-invoice",
@@ -623,19 +766,24 @@ export default function SubInvoiceDetailPage() {
     status: form.status,
     poNumber: form.poNumber,
     purchaseOrderId: form.purchaseOrderId,
+
     supplierType:
       selectedPurchaseOrder?.supplierType ||
       invoice?.supplierType ||
       "",
+
     supplierId:
       selectedPurchaseOrder?.supplierId ||
       invoice?.supplierId ||
       "",
+
     supplier,
+
     projectId: form.projectId,
     projectName: form.projectName,
     siteAddress: form.siteAddress,
     scopeOfWork: form.scopeOfWork,
+
     items: calculatedItems,
     subtotal,
     gst,
@@ -644,7 +792,7 @@ export default function SubInvoiceDetailPage() {
   };
 
   // ==========================================================
-  // 9. Cancel editing
+  // 12. Cancel editing
   // ==========================================================
 
   function handleCancel() {
@@ -656,6 +804,7 @@ export default function SubInvoiceDetailPage() {
       accountName:
         invoice.supplier?.accountName ||
         invoice.supplier?.bankName ||
+        invoice.supplier?.name ||
         "",
     });
 
@@ -680,11 +829,16 @@ export default function SubInvoiceDetailPage() {
   }
 
   // ==========================================================
-  // 10. Save changes
+  // 13. Save changes
   // ==========================================================
 
   async function handleSave() {
     setError("");
+
+    if (!sessionUser?.uid) {
+      setError("Your login session has expired. Please log in again.");
+      return;
+    }
 
     if (!form.invoiceNumber.trim()) {
       setError("Please enter an invoice number.");
@@ -696,7 +850,7 @@ export default function SubInvoiceDetailPage() {
       return;
     }
 
-    if (!invoiceId) {
+    if (!invoiceId || !invoice) {
       setError("Invoice ID is missing.");
       return;
     }
@@ -704,16 +858,48 @@ export default function SubInvoiceDetailPage() {
     try {
       setSaving(true);
 
-      let verifiedOrder = null;
+      // ------------------------------------------------------
+      // Re-check invoice ownership before updating.
+      // ------------------------------------------------------
 
+      const latestInvoiceSnapshot = await getDoc(
+        doc(db, "subInvoices", String(invoiceId))
+      );
+
+      if (!latestInvoiceSnapshot.exists()) {
+        throw new Error("This invoice no longer exists.");
+      }
+
+      const latestInvoice = latestInvoiceSnapshot.data();
+
+      const isAdmin = sessionUser.role === "admin";
+      const isOwner = latestInvoice.uid === sessionUser.uid;
+
+      if (!isAdmin && !isOwner) {
+        throw new Error(
+          "You do not have permission to edit this invoice."
+        );
+      }
+
+      // ------------------------------------------------------
       // Re-verify PO ownership and status before saving.
+      // ------------------------------------------------------
+
+      let verifiedOrder = null;
+      let verifiedSupplierData = null;
+
       if (form.purchaseOrderId) {
         const verification = await verifyPurchaseOrder(
           form.purchaseOrderId
         );
 
         verifiedOrder = verification.order;
+        verifiedSupplierData = verification.supplierData;
       }
+
+      // ------------------------------------------------------
+      // Recalculate invoice items.
+      // ------------------------------------------------------
 
       const cleanItems = form.items.map((item) => {
         const qty = Number(item.qty) || 0;
@@ -737,26 +923,27 @@ export default function SubInvoiceDetailPage() {
       const cleanGst = cleanSubtotal * 0.1;
       const cleanTotal = cleanSubtotal + cleanGst;
 
+      // ------------------------------------------------------
+      // Save updated invoice.
+      //
+      // Keep original uid. Do not replace invoice owner UID
+      // with another value during editing.
+      // ------------------------------------------------------
+
       const updatedData = {
         invoiceType: "sub-invoice",
+
         invoiceNumber: form.invoiceNumber.trim(),
         invoiceDate: form.invoiceDate,
         dueDate: form.dueDate || "",
         status: form.status || "Draft",
 
         purchaseOrderId: verifiedOrder?.id || "",
-        poNumber: verifiedOrder
-          ? String(
-              verifiedOrder.poNumber ||
-              verifiedOrder.purchaseOrderNumber ||
-              verifiedOrder.orderNumber ||
-              verifiedOrder.number ||
-              ""
-            ).trim()
-          : "",
+        poNumber: verifiedOrder?.poNumber || "",
 
         supplierType:
           verifiedOrder?.supplierType || "",
+
         supplierId:
           verifiedOrder?.supplierId || "",
 
@@ -768,8 +955,18 @@ export default function SubInvoiceDetailPage() {
           contact: supplier.contact || "",
           email: supplier.email || "",
           phone: supplier.phone || "",
-          bankAccount: supplier.bankAccount || "",
-          BSB: supplier.BSB || "",
+          bankName:
+            supplier.bankName ||
+            verifiedSupplierData?.bankName ||
+            "",
+          bankAccount:
+            supplier.bankAccount ||
+            verifiedSupplierData?.bankAccount ||
+            "",
+          BSB:
+            supplier.BSB ||
+            verifiedSupplierData?.BSB ||
+            "",
           accountName: supplier.accountName || "",
         },
 
@@ -782,6 +979,7 @@ export default function SubInvoiceDetailPage() {
         subtotal: cleanSubtotal,
         gst: cleanGst,
         total: cleanTotal,
+
         notes: form.notes || "",
         updatedAt: serverTimestamp(),
       };
@@ -790,6 +988,10 @@ export default function SubInvoiceDetailPage() {
         doc(db, "subInvoices", String(invoiceId)),
         updatedData
       );
+
+      // ------------------------------------------------------
+      // Update local state.
+      // ------------------------------------------------------
 
       const localUpdatedData = {
         ...updatedData,
@@ -827,13 +1029,40 @@ export default function SubInvoiceDetailPage() {
   }
 
   // ==========================================================
-  // 11. Loading / not found
+  // 14. Loading / authentication / not found
   // ==========================================================
 
-  if (loading) {
+  if (sessionLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
-        <p className="text-gray-500">Loading Invoice...</p>
+        <p className="text-gray-500">
+          {sessionLoading
+            ? "Verifying login session..."
+            : "Loading Invoice..."}
+        </p>
+      </div>
+    );
+  }
+
+  if (!sessionUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="mx-auto max-w-3xl rounded-xl bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-bold">
+            Login Required
+          </h1>
+
+          <p className="mt-3 text-sm text-red-600">
+            {sessionError || "Please log in to continue."}
+          </p>
+
+          <Link
+            href="/login"
+            className="mt-5 inline-block rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white"
+          >
+            Go to Login
+          </Link>
+        </div>
       </div>
     );
   }
@@ -866,7 +1095,7 @@ export default function SubInvoiceDetailPage() {
   }
 
   // ==========================================================
-  // 12. Reusable field
+  // 15. Reusable field
   // ==========================================================
 
   function renderField(
@@ -906,12 +1135,13 @@ export default function SubInvoiceDetailPage() {
   }
 
   // ==========================================================
-  // 13. Page UI
+  // 16. Page UI
   // ==========================================================
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-8">
       <div className="mx-auto max-w-6xl">
+
         {/* Header */}
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -967,12 +1197,14 @@ export default function SubInvoiceDetailPage() {
           </div>
         </div>
 
+        {/* Success message */}
         {saved && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
             Invoice changes saved successfully.
           </div>
         )}
 
+        {/* Error message */}
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -1079,7 +1311,9 @@ export default function SubInvoiceDetailPage() {
                   }
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="">Select PO Number</option>
+                  <option value="">
+                    Select PO Number
+                  </option>
 
                   {purchaseOrders.map((order) => (
                     <option key={order.id} value={order.id}>
@@ -1190,6 +1424,7 @@ export default function SubInvoiceDetailPage() {
                   <th className="w-36 pb-3 pr-3">Unit Price</th>
                   <th className="w-24 pb-3 pr-3">Tax %</th>
                   <th className="w-36 pb-3 pr-3">Total</th>
+
                   {editing && (
                     <th className="w-20 pb-3"></th>
                   )}

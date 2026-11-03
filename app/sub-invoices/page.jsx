@@ -2,11 +2,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
 import {
-  getAuth,
-  onAuthStateChanged,
-} from "firebase/auth";
+  collection,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 
@@ -24,63 +25,77 @@ export default function SubInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // 1. Load current user's Sub-Invoices
+  // 1. Get the same UID used by Sidebar through /api/me
   useEffect(() => {
     let active = true;
-    let unsubscribe;
 
-    async function loadSubInvoices(currentUser) {
+    async function loadSubInvoices() {
       try {
         setLoading(true);
         setError("");
 
-        if (!currentUser) {
-          throw new Error("Please log in to view Invoices.");
+        // Get authenticated user information from server session
+        const meResponse = await fetch("/api/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const meData = await meResponse.json();
+
+        if (!meResponse.ok || !meData.authenticated || !meData.uid) {
+          throw new Error(
+            meData.error || "Please log in to view Invoices."
+          );
         }
 
-        // Firebase Authentication UID
-        const currentUID = currentUser.uid;
+        // UID comes from the verified yj_session cookie
+        const currentUID = meData.uid;
 
-        const snapshot = await getDocs(
-          collection(db, "subInvoices")
+        console.log("[Sub-Invoices] Current UID:", currentUID);
+
+        // 2. Query only invoices matching this UID
+        const invoicesQuery = query(
+          collection(db, "subInvoices"),
+          where("uid", "==", currentUID)
         );
+
+        const snapshot = await getDocs(invoicesQuery);
 
         if (!active) return;
 
-        // Only show invoices belonging to current UID
-        const data = snapshot.docs
-          .filter((document) => {
-            const invoice = document.data();
-            return invoice.uid === currentUID;
-          })
-          .map((document) => {
-            const invoice = document.data();
+        const data = snapshot.docs.map((document) => {
+          const invoice = document.data();
 
-            return {
-              id: document.id,
-              invoiceNumber: invoice.invoiceNumber || "",
-              date: invoice.invoiceDate || invoice.date || "",
-              dueDate: invoice.dueDate || "",
-              amount:
-                Number(invoice.total) ||
-                Number(invoice.amount) ||
-                0,
-              status: invoice.status || "Draft",
-              uid: invoice.uid || "",
-            };
-          });
+          return {
+            id: document.id,
+            invoiceNumber: invoice.invoiceNumber || "",
+            date: invoice.invoiceDate || invoice.date || "",
+            dueDate: invoice.dueDate || "",
+            amount:
+              Number(invoice.total) ||
+              Number(invoice.amount) ||
+              0,
+            status: invoice.status || "Draft",
+            uid: invoice.uid || "",
+          };
+        });
 
+        // Sort newest invoice first
         data.sort((a, b) =>
-          b.date.localeCompare(a.date)
+          String(b.date).localeCompare(String(a.date))
         );
 
         setSubInvoices(data);
 
       } catch (err) {
-        console.error("Failed to load Sub-Invoices:", err);
+        console.error("[Sub-Invoices] Failed to load:", err);
 
         if (active) {
-          setError(err.message || "Failed to load Sub-Invoices.");
+          setError(
+            err.message || "Failed to load Sub-Invoices."
+          );
+          setSubInvoices([]);
         }
       } finally {
         if (active) {
@@ -89,27 +104,14 @@ export default function SubInvoicesPage() {
       }
     }
 
-    // Wait for Firebase Auth session restoration
-    unsubscribe = onAuthStateChanged(
-      getAuth(),
-      (user) => {
-        if (user) {
-          loadSubInvoices(user);
-        } else {
-          setSubInvoices([]);
-          setError("Please log in to view Invoices.");
-          setLoading(false);
-        }
-      }
-    );
+    loadSubInvoices();
 
     return () => {
       active = false;
-      if (unsubscribe) unsubscribe();
     };
   }, []);
 
-  // 2. Search and filter
+  // 3. Search and status filter
   const searchText = search.trim().toLowerCase();
 
   const filteredInvoices = subInvoices.filter((invoice) => {
@@ -123,7 +125,7 @@ export default function SubInvoicesPage() {
     return matchesSearch && matchesStatus;
   });
 
-  // 3. Page UI
+  // 4. Page UI
   return (
     <div className="min-h-screen bg-gray-50 p-8">
 
@@ -216,7 +218,10 @@ export default function SubInvoicesPage() {
 
             {loading && (
               <tr>
-                <td colSpan={5} className="px-6 py-16 text-center text-sm text-gray-500">
+                <td
+                  colSpan={5}
+                  className="px-6 py-16 text-center text-sm text-gray-500"
+                >
                   Loading Invoices...
                 </td>
               </tr>
@@ -257,7 +262,10 @@ export default function SubInvoicesPage() {
 
             {!loading && filteredInvoices.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-16 text-center text-sm text-gray-500">
+                <td
+                  colSpan={5}
+                  className="px-6 py-16 text-center text-sm text-gray-500"
+                >
                   No Invoices found.
                 </td>
               </tr>
@@ -270,7 +278,7 @@ export default function SubInvoicesPage() {
   );
 }
 
-// 4. Status badge
+// 5. Status badge
 function StatusBadge({ status }) {
   const styles = {
     Draft: "bg-gray-100 text-gray-700",

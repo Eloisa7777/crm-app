@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"; //实时处理请求，不能只作为静态》》1. Read session cookie
 
 const VALID_ROLES = [
   "admin",
