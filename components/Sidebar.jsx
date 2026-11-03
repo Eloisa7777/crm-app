@@ -168,7 +168,7 @@ export default function Sidebar() {
             </div>
 
             <div className="text-xs text-gray-400 truncate">
-              {role || "Administration"}
+              {role || "yjpo"}
             </div>
           </div>
 
