@@ -16,6 +16,7 @@ const menuItems = [
   { name: "Bills", href: "/bills", icon: "□" },
   { name: "Invoices", href: "/invoices", icon: "▤" },
   { name: "Subcontractor Invoices", href: "/sub-invoices", icon: "▤" },
+  { name:  "User Settings", href: "/settings", icon: "⚙" },
 ];
 
 export default function Sidebar() {

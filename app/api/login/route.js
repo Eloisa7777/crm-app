@@ -4,8 +4,8 @@ import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
 
-// Session expires after 5 days.
-const SESSION_EXPIRES_IN = 5 * 24 * 60 * 60 * 1000;
+// Session expires after 4 hours.
+const SESSION_EXPIRES_IN = 4 * 60 * 60 * 1000;
 
 // All valid CRM roles.
 const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup"];
