@@ -10,7 +10,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/api/login",
   "/api/logout",
-  "/api/admin/set-test-role",
+  //"/api/admin/set-test-role",
 ];
 
 // ============================================================
