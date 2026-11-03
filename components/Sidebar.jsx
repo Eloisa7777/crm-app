@@ -168,7 +168,7 @@ export default function Sidebar() {
             </div>
 
             <div className="text-xs text-gray-400 truncate">
-              {role || "yjpo"}
+              {role ? role.toUpperCase() : "No role"}
             </div>
           </div>
 
