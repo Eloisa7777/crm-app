@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 
@@ -7,7 +6,6 @@ export const runtime = "nodejs";
 const TEST_UID = "Eqj5n773rbOC9pHRc3xyegSxyIk1";
 
 export async function GET(request) {
-  // Only allow this endpoint when a secret is configured.
   const expectedSecret = process.env.ROLE_SETUP_SECRET;
   const suppliedSecret = request.nextUrl.searchParams.get("secret");
 
@@ -24,27 +22,32 @@ export async function GET(request) {
 
   try {
     const { adminAuth } = getFirebaseAdminServices();
+
     const user = await adminAuth.getUser(TEST_UID);
 
-    await adminAuth.setCustomUserClaims(TEST_UID, {
-      ...(user.customClaims || {}),
-      role: "admin",
-    });
+    // 保留其他 Custom Claims，只删除 role
+    const { role, ...remainingClaims } = user.customClaims || {};
+
+    await adminAuth.setCustomUserClaims(
+      TEST_UID,
+      remainingClaims
+    );
 
     return NextResponse.json({
       success: true,
       uid: TEST_UID,
-      role: "subsup",
-      message: "Role assigned. Sign out and sign in again.",
+      previousRole: role || null,
+      message: "Role claim removed successfully.",
     });
+
   } catch (error) {
-    console.error("[Role Setup] Failed:", {
+    console.error("[Role Removal] Failed:", {
       code: error?.code,
       message: error?.message,
     });
 
     return NextResponse.json(
-      { error: "Failed to assign role" },
+      { error: "Failed to remove role" },
       { status: 500 }
     );
   }
