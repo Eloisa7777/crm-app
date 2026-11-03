@@ -86,7 +86,7 @@ export async function GET(request) {
       return {
         uid: authUser.uid,
         email: authUser.email || "",
-        displayName: firestoreUser.displayName || "",
+        displayName: firestoreUser.displayname || "",
       };
     });
 
