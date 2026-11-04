@@ -78,16 +78,10 @@ export async function GET(request) {
     // Obtain the OIDC token from the current Vercel invocation.
 const token = await getVercelOidcToken({ audience });
 
-if (typeof token !== "string") {
-  throw new Error("OIDC token is not a string.");
-}
-
 const parts = token.trim().split(".");
 
 if (parts.length !== 3) {
-  throw new Error(
-    `Invalid JWT structure. Segments: ${parts.length}`
-  );
+  throw new Error("Invalid OIDC JWT format");
 }
 
 const header = JSON.parse(
@@ -99,25 +93,18 @@ const payload = JSON.parse(
 );
 
 console.log("[OIDC TOKEN DIAGNOSTICS]", {
-  tokenLength: token.length,
   alg: header.alg,
-  kidExists: Boolean(header.kid),
   iss: payload.iss,
   aud: payload.aud,
   sub: payload.sub,
-  exp: payload.exp,
   iat: payload.iat,
-  currentTime: Math.floor(Date.now() / 1000),
-  isExpired:
-    typeof payload.exp === "number"
-      ? payload.exp <= Math.floor(Date.now() / 1000)
-      : null,
+  exp: payload.exp,
+  expectedAudience: audience,
   audienceMatches:
     payload.aud === audience ||
     (Array.isArray(payload.aud) &&
       payload.aud.includes(audience)),
 });
-
 return new Response(token.trim(), {
   status: 200,
   headers: {
