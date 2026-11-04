@@ -76,57 +76,55 @@ export async function GET(request) {
         `/providers/${providerId}`;
 
     // Obtain the OIDC token from the current Vercel invocation.
-    const token = await getVercelOidcToken({
-      audience,
-    });
+const token = await getVercelOidcToken({ audience });
 
-    const parts = token.split(".");
+if (typeof token !== "string") {
+  throw new Error("OIDC token is not a string.");
+}
 
-    if (parts.length !== 3) {
-    throw new Error("Vercel returned an invalid JWT format.");
-    }
+const parts = token.trim().split(".");
 
-    const header = JSON.parse(
-    Buffer.from(parts[0], "base64url").toString("utf8")
-    );
+if (parts.length !== 3) {
+  throw new Error(
+    `Invalid JWT structure. Segments: ${parts.length}`
+  );
+}
 
-    const payload = JSON.parse(
-    Buffer.from(parts[1], "base64url").toString("utf8")
-    );
+const header = JSON.parse(
+  Buffer.from(parts[0], "base64url").toString("utf8")
+);
 
-    // 只记录 JWT 元数据，不记录完整 Token。
-    console.log("[OIDC TOKEN CHECK]", {
-    alg: header.alg,
-    kidExists: !!header.kid,
-    iss: payload.iss,
-    aud: payload.aud,
-    sub: payload.sub,
-    exp: payload.exp,
-    nbf: payload.nbf,
-    expired: payload.exp
-        ? payload.exp <= Math.floor(Date.now() / 1000)
-        : null,
-    audienceMatches:
-        payload.aud === audience ||
-        (Array.isArray(payload.aud) && payload.aud.includes(audience)),
-    });
+const payload = JSON.parse(
+  Buffer.from(parts[1], "base64url").toString("utf8")
+);
 
-    if (
-      typeof token !== "string" ||
-      token.split(".").length !== 3
-    ) {
-      throw new Error("Invalid Vercel OIDC token.");
-    }
+console.log("[OIDC TOKEN DIAGNOSTICS]", {
+  tokenLength: token.length,
+  alg: header.alg,
+  kidExists: Boolean(header.kid),
+  iss: payload.iss,
+  aud: payload.aud,
+  sub: payload.sub,
+  exp: payload.exp,
+  iat: payload.iat,
+  currentTime: Math.floor(Date.now() / 1000),
+  isExpired:
+    typeof payload.exp === "number"
+      ? payload.exp <= Math.floor(Date.now() / 1000)
+      : null,
+  audienceMatches:
+    payload.aud === audience ||
+    (Array.isArray(payload.aud) &&
+      payload.aud.includes(audience)),
+});
 
-    // Return plain text because credential_source.format.type = text.
-    return new Response(token, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-        Pragma: "no-cache",
-      },
-    });
+return new Response(token.trim(), {
+  status: 200,
+  headers: {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+  },
+});
   } catch (error) {
     console.error("[OIDC Bridge] Error:", {
       message: error?.message,
