@@ -73,13 +73,33 @@ export async function POST(request) {
       );
     }
 
-    // 7. Read role configuration
-    const roleRef = adminDb.collection("roles").doc(roleId);
-    const roleSnap = await roleRef.get();
+
+    // 7. Read Firestore Role configuration
+    let roleSnap = await adminDb
+      .collection("roles")
+      .doc(roleId.trim())
+      .get();
+
+    // Support existing documents with auto-generated IDs
+    if (!roleSnap.exists) {
+      const roleQuery = await adminDb
+        .collection("roles")
+        .where("rolename", "==", roleId.trim())
+        .limit(1)
+        .get();
+
+      if (!roleQuery.empty) {
+        roleSnap = roleQuery.docs[0];
+      }
+    }
 
     if (!roleSnap.exists) {
       return NextResponse.json(
-        { success: false, error: "Role configuration not found" },
+        {
+          success: false,
+          error: "Role configuration not found",
+          code: "ROLE_NOT_FOUND",
+        },
         { status: 403 }
       );
     }
@@ -88,6 +108,17 @@ export async function POST(request) {
 
     const role = roleData.rolename;
     const permissions = roleData.permissions;
+
+    console.log("[CRM LOGIN RBAC]", {
+  uid,
+  roleId,
+  roleDocumentId: roleSnap.id,
+  roleName: roleData.rolename,
+  permissionsValid:
+    !!permissions &&
+    typeof permissions === "object" &&
+    !Array.isArray(permissions),
+});
 
     // 8. Validate role
     if (!VALID_ROLES.includes(role)) {

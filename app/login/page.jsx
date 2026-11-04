@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -9,14 +10,18 @@ import { auth } from "@/lib/firebase";
 
 // ============================================================
 // Login Page
+//
 // 1. Firebase Email / Password authentication
-// 2. Refresh ID Token and read Custom Claims
-// 3. Require a valid CRM role
-// 4. Exchange ID Token for server Session Cookie
-// 5. Redirect to Dashboard
+// 2. Get Firebase ID Token
+// 3. Exchange ID Token for server Session Cookie
+// 4. Server verifies Firestore RBAC
+// 5. Clear client Firebase Auth state
+// 6. Redirect to Dashboard
+//
+// IMPORTANT:
+// CRM roles are managed by Firestore RBAC.
+// Do NOT read Firebase Custom Claims.
 // ============================================================
-
-const VALID_ROLES = ["admin", "yjpo", "yjest"];
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -44,38 +49,21 @@ export default function LoginPage() {
       );
 
       // ========================================================
-      // 2. Force refresh ID Token
-      //    This retrieves the latest Firebase Custom Claims.
+      // 2. Get Firebase ID Token
+      //
+      // No Custom Claims role validation here.
+      // Firestore RBAC is checked by the server.
       // ========================================================
 
-      const idTokenResult =
-        await credential.user.getIdTokenResult(true);
+      const idToken = await credential.user.getIdToken(true);
 
-      const idToken = idTokenResult.token;
-      const role = idTokenResult.claims.role;
-
-      console.info("[Login] Firebase claims:", {
+      console.info("[Login] Firebase authenticated:", {
         uid: credential.user.uid,
-        role: role || null,
+        email: credential.user.email,
       });
 
       // ========================================================
-      // 3. Check CRM role
-      // ========================================================
-
-      if (
-        typeof role !== "string" ||
-        !VALID_ROLES.includes(role)
-      ) {
-        await signOut(auth);
-
-        throw new Error(
-          "This account does not have a valid CRM role. Please contact the administrator."
-        );
-      }
-
-      // ========================================================
-      // 4. Exchange ID Token for server Session Cookie
+      // 3. Exchange ID Token for server Session Cookie
       // ========================================================
 
       const response = await fetch("/api/login", {
@@ -95,30 +83,36 @@ export default function LoginPage() {
         );
       }
 
-      // Make sure the server agrees with the Firebase role.
-      if (result.role !== role) {
+      // ========================================================
+      // 4. Validate server response
+      // ========================================================
+
+      if (!result.uid || !result.role) {
         throw new Error(
-          "Role verification failed. Please contact the administrator."
+          "Invalid CRM login response. Please contact the administrator."
         );
       }
 
-      console.info("[Login] Server session created:", {
+      console.info("[Login] Firestore RBAC verified:", {
         uid: result.uid,
         role: result.role,
+        permissions: result.permissions,
       });
 
       // ========================================================
       // 5. Clear client-side Firebase Auth state
-      //    HttpOnly server Session Cookie remains.
+      //
+      // HttpOnly yj_session cookie remains.
       // ========================================================
 
       await signOut(auth);
 
       // ========================================================
-      // 6. Full browser navigation
+      // 6. Redirect to Dashboard
       // ========================================================
 
       window.location.replace("/");
+
     } catch (err) {
       console.error("[Login] Sign-in failed:", {
         code: err?.code,
@@ -135,17 +129,23 @@ export default function LoginPage() {
 
       setError(
         messages[err?.code] ||
-          err?.message ||
-          "登录失败，请检查服务器日志"
+        err?.message ||
+        "登录失败，请检查服务器日志"
       );
 
-      // Make sure Firebase client state is cleared after failure.
+      // ========================================================
+      // 7. Clear Firebase client state after failure
+      // ========================================================
+
       try {
         if (auth.currentUser) {
           await signOut(auth);
         }
       } catch (signOutError) {
-        console.warn("[Login] Cleanup failed:", signOutError?.message);
+        console.warn(
+          "[Login] Cleanup failed:",
+          signOutError?.message
+        );
       }
 
       setLoading(false);
