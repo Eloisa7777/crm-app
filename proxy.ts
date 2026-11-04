@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/api/login",
   "/api/logout",
+  "/api/internal/gcp-subject-token",
 ];
 
 // ============================================================
