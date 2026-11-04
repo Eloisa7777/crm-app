@@ -175,8 +175,8 @@ export async function proxy(request: NextRequest) {
     // 5.3 Initialize Firebase Admin
     // --------------------------------------------------------
 
-const { adminAuth, adminDb } =
-  await getFirebaseAdminServices();
+    const { adminAuth, adminDb } =
+      getFirebaseAdminServices();
 
     // --------------------------------------------------------
     // 5.4 Verify Firebase Session Cookie

@@ -37,8 +37,8 @@ export async function POST(request) {
     }
 
     // 2. Initialize Firebase Admin
-const { adminAuth, adminDb } =
-  await getFirebaseAdminServices();
+    const { adminAuth, adminDb } =
+      getFirebaseAdminServices();
 
     // 3. Verify Firebase ID Token
     const decodedToken = await adminAuth.verifyIdToken(
