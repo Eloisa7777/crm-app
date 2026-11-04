@@ -9,19 +9,30 @@ import {
 import { auth } from "@/lib/firebase";
 
 // ============================================================
-// Login Page
+// CRM Login Page
 //
 // 1. Firebase Email / Password authentication
 // 2. Get Firebase ID Token
 // 3. Exchange ID Token for server Session Cookie
 // 4. Server verifies Firestore RBAC
 // 5. Clear client Firebase Auth state
-// 6. Redirect to Dashboard
+// 6. Redirect according to Firestore roleId
 //
 // IMPORTANT:
-// CRM roles are managed by Firestore RBAC.
-// Do NOT read Firebase Custom Claims.
+// - Roles are managed by Firestore RBAC.
+// - Do NOT read Firebase Custom Claims.
 // ============================================================
+
+// ============================================================
+// 1. Role-based default landing pages
+// ============================================================
+
+const ROLE_REDIRECTS = {
+  admin: "/",
+  yjpo: "/purchase-orders",
+  yjest: "/quote",
+  subsup: "/sub-invoices",
+};
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -39,7 +50,7 @@ export default function LoginPage() {
 
     try {
       // ========================================================
-      // 1. Firebase Authentication
+      // 2. Firebase Authentication
       // ========================================================
 
       const credential = await signInWithEmailAndPassword(
@@ -49,10 +60,7 @@ export default function LoginPage() {
       );
 
       // ========================================================
-      // 2. Get Firebase ID Token
-      //
-      // No Custom Claims role validation here.
-      // Firestore RBAC is checked by the server.
+      // 3. Get Firebase ID Token
       // ========================================================
 
       const idToken = await credential.user.getIdToken(true);
@@ -63,7 +71,7 @@ export default function LoginPage() {
       });
 
       // ========================================================
-      // 3. Exchange ID Token for server Session Cookie
+      // 4. Exchange ID Token for Session Cookie
       // ========================================================
 
       const response = await fetch("/api/login", {
@@ -84,23 +92,43 @@ export default function LoginPage() {
       }
 
       // ========================================================
-      // 4. Validate server response
+      // 5. Validate server response
       // ========================================================
 
       if (!result.uid || !result.role) {
         throw new Error(
-          "Invalid CRM login response. Please contact the administrator."
+          "Invalid CRM login response. Please contact administrator."
         );
       }
 
+      // Normalize role ID
+      const roleId = String(result.role).trim().toLowerCase();
+
       console.info("[Login] Firestore RBAC verified:", {
         uid: result.uid,
-        role: result.role,
+        role: roleId,
         permissions: result.permissions,
       });
 
       // ========================================================
-      // 5. Clear client-side Firebase Auth state
+      // 6. Determine landing page by role
+      // ========================================================
+
+      const destination = ROLE_REDIRECTS[roleId];
+
+      if (!destination) {
+        throw new Error(
+          `No default landing page configured for role: ${roleId}`
+        );
+      }
+
+      console.info("[Login] Redirecting:", {
+        role: roleId,
+        destination,
+      });
+
+      // ========================================================
+      // 7. Clear client Firebase Auth state
       //
       // HttpOnly yj_session cookie remains.
       // ========================================================
@@ -108,10 +136,10 @@ export default function LoginPage() {
       await signOut(auth);
 
       // ========================================================
-      // 6. Redirect to Dashboard
+      // 8. Redirect according to role
       // ========================================================
 
-      window.location.replace("/");
+      window.location.replace(destination);
 
     } catch (err) {
       console.error("[Login] Sign-in failed:", {
@@ -134,7 +162,7 @@ export default function LoginPage() {
       );
 
       // ========================================================
-      // 7. Clear Firebase client state after failure
+      // 9. Cleanup Firebase client state
       // ========================================================
 
       try {
