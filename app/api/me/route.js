@@ -43,9 +43,7 @@ export async function GET() {
     // ========================================================
     // 2. Initialize Firebase Admin
     // ========================================================
-    const { adminAuth, adminDb } =
-      getFirebaseAdminServices();
-
+const { adminAuth, adminDb } = await getFirebaseAdminServices();
     // ========================================================
     // 3. Verify Firebase Session Cookie
     // ========================================================

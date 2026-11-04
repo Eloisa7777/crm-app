@@ -36,7 +36,7 @@ export async function GET(request) {
     // 2. 初始化 Firebase Admin Services
     // --------------------------------------------------------
 
-    const { adminAuth, adminDb } = getFirebaseAdminServices();
+const { adminAuth, adminDb } = await getFirebaseAdminServices();
 
     // --------------------------------------------------------
     // 3. 获取分页参数

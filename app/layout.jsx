@@ -27,8 +27,7 @@ export default async function RootLayout({ children }) {
 
   if (sessionCookie) {
     try {
-      const { adminAuth, adminDb } =
-        getFirebaseAdminServices();
+const { adminAuth, adminDb } = await getFirebaseAdminServices();
 
       // 1. Verify Firebase Session Cookie.
       const decodedToken =
