@@ -69,14 +69,46 @@ export async function GET(request) {
     }
 
     const audience =
-      process.env.GCP_WIF_TOKEN_AUDIENCE?.trim() ||
-      `https://iam.googleapis.com/projects/${projectNumber}` +
+    process.env.GCP_AUDIENCE?.trim() ||
+    process.env.GCP_WIF_TOKEN_AUDIENCE?.trim() ||
+    `https://iam.googleapis.com/projects/${projectNumber}` +
         `/locations/global/workloadIdentityPools/${poolId}` +
         `/providers/${providerId}`;
 
     // Obtain the OIDC token from the current Vercel invocation.
     const token = await getVercelOidcToken({
       audience,
+    });
+
+    const parts = token.split(".");
+
+    if (parts.length !== 3) {
+    throw new Error("Vercel returned an invalid JWT format.");
+    }
+
+    const header = JSON.parse(
+    Buffer.from(parts[0], "base64url").toString("utf8")
+    );
+
+    const payload = JSON.parse(
+    Buffer.from(parts[1], "base64url").toString("utf8")
+    );
+
+    // 只记录 JWT 元数据，不记录完整 Token。
+    console.log("[OIDC TOKEN CHECK]", {
+    alg: header.alg,
+    kidExists: !!header.kid,
+    iss: payload.iss,
+    aud: payload.aud,
+    sub: payload.sub,
+    exp: payload.exp,
+    nbf: payload.nbf,
+    expired: payload.exp
+        ? payload.exp <= Math.floor(Date.now() / 1000)
+        : null,
+    audienceMatches:
+        payload.aud === audience ||
+        (Array.isArray(payload.aud) && payload.aud.includes(audience)),
     });
 
     if (
