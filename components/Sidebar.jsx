@@ -5,19 +5,28 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+// ============================================================
+// 1. Sidebar Menu Configuration
+// Each menu is linked to Firestore role permission
+// ============================================================
+
 const menuItems = [
-  { name: "Dashboard", href: "/", icon: "▦" },
-  { name: "Quote", href: "/quote", icon: "▣" },
-  { name: "Projects", href: "/projects", icon: "▣" },
-  { name: "Suppliers", href: "/suppliers", icon: "♙" },
-  { name: "Subcontractors", href: "/subcontractors", icon: "♙" },
-  { name: "Clients", href: "/clients", icon: "♙" },
-  { name: "Purchase Orders", href: "/purchase-orders", icon: "□" },
-  { name: "Bills", href: "/bills", icon: "□" },
-  { name: "Invoices", href: "/invoices", icon: "▤" },
-  { name: "Subcontractor Invoices", href: "/sub-invoices", icon: "▤" },
-  { name:  "User Settings", href: "/settings", icon: "⚙" },
+  { name: "Dashboard", href: "/", icon: "▦", permission: "dashboard" },
+  { name: "Quote", href: "/quote", icon: "▣", permission: "quote" },
+  { name: "Projects", href: "/projects", icon: "▣", permission: "projects" },
+  { name: "Suppliers", href: "/suppliers", icon: "♙", permission: "suppliers" },
+  { name: "Subcontractors", href: "/subcontractors", icon: "♙", permission: "subcontractors" },
+  { name: "Clients", href: "/clients", icon: "♙", permission: "clients" },
+  { name: "Purchase Orders", href: "/purchase-orders", icon: "□", permission: "purchaseOrders" },
+  { name: "Bills", href: "/bills", icon: "□", permission: "bills" },
+  { name: "Invoices", href: "/invoices", icon: "▤", permission: "invoices" },
+  { name: "Subcontractor Invoices", href: "/sub-invoices", icon: "▤", permission: "subInvoices" },
+  { name: "User Settings", href: "/settings", icon: "⚙", permission: "settings" },
 ];
+
+// ============================================================
+// 2. Sidebar Component
+// ============================================================
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -25,12 +34,15 @@ export default function Sidebar() {
 
   const [uid, setUid] = useState("");
   const [role, setRole] = useState("");
+  const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   // ============================================================
-  // Get authenticated user from server-side session cookie
+  // 3. Get authenticated user and RBAC permissions
+  // Data comes from server-side /api/me
   // ============================================================
+
   useEffect(() => {
     let active = true;
 
@@ -49,20 +61,35 @@ export default function Sidebar() {
         if (!response.ok || !data.authenticated) {
           setUid("");
           setRole("");
+          setPermissions({});
           setError("Not signed in");
           return;
         }
 
         setUid(data.uid || "");
         setRole(data.role || "");
+
+        // Only accept a valid permissions object.
+        setPermissions(
+          data.permissions &&
+          typeof data.permissions === "object" &&
+          !Array.isArray(data.permissions)
+            ? data.permissions
+            : {}
+        );
+
         setError("");
 
       } catch (err) {
         console.error("Get current user error:", err);
 
         if (active) {
+          setUid("");
+          setRole("");
+          setPermissions({});
           setError("Unable to get user information");
         }
+
       } finally {
         if (active) {
           setLoading(false);
@@ -78,8 +105,30 @@ export default function Sidebar() {
   }, []);
 
   // ============================================================
-  // Logout
+  // 4. RBAC Sidebar Filtering
+  //
+  // Admin:
+  //   Show all menus
+  //
+  // Other roles:
+  //   Show menus only when permission === true
+  //
+  // Loading:
+  //   Do not show menus before permissions are loaded
   // ============================================================
+
+  const visibleMenuItems = !loading
+    ? role === "admin"
+      ? menuItems
+      : menuItems.filter(
+          (item) => permissions[item.permission] === true
+        )
+    : [];
+
+  // ============================================================
+  // 5. Logout
+  // ============================================================
+
   async function handleLogout() {
     try {
       const response = await fetch("/api/logout", {
@@ -100,6 +149,10 @@ export default function Sidebar() {
     }
   }
 
+  // ============================================================
+  // 6. Render Sidebar
+  // ============================================================
+
   return (
     <aside className="w-64 bg-indigo-800 border-r border-gray-200 min-h-screen flex flex-col shrink-0">
 
@@ -111,37 +164,49 @@ export default function Sidebar() {
         </div>
 
         <div className="space-y-1">
-          {menuItems.map((item) => {
-            const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`
-                  flex items-center gap-3
-                  px-3 py-2.5
-                  rounded-lg
-                  text-sm font-medium
-                  transition
-                  ${
-                    active
-                      ? "bg-amber-400 text-black"
-                      : "text-gray-300 hover:bg-indigo-300 hover:text-black"
-                  }
-                `}
-              >
-                <span className="w-5 text-center text-base">
-                  {item.icon}
-                </span>
+          {loading ? (
+            <div className="px-3 py-3 text-xs text-gray-400">
+              Loading permissions...
+            </div>
+          ) : error ? (
+            <div className="px-3 py-3 text-xs text-red-300">
+              {error}
+            </div>
+          ) : (
+            visibleMenuItems.map((item) => {
+              const active =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
 
-                <span>{item.name}</span>
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`
+                    flex items-center gap-3
+                    px-3 py-2.5
+                    rounded-lg
+                    text-sm font-medium
+                    transition
+                    ${
+                      active
+                        ? "bg-amber-400 text-black"
+                        : "text-gray-300 hover:bg-indigo-300 hover:text-black"
+                    }
+                  `}
+                >
+                  <span className="w-5 text-center text-base">
+                    {item.icon}
+                  </span>
+
+                  <span>{item.name}</span>
+                </Link>
+              );
+            })
+          )}
+
         </div>
       </nav>
 

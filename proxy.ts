@@ -26,8 +26,13 @@ const PAGE_PERMISSIONS = [
     fallback: "/login",
   },
   {
-    paths: ["/dashboard"],
-    permission: "dashboard",
+    paths: ["/quote"],
+    permission: "quote",
+    fallback: "/login",
+  },
+  {
+    paths: ["/projects"],
+    permission: "projects",
     fallback: "/login",
   },
   {
@@ -46,13 +51,18 @@ const PAGE_PERMISSIONS = [
     fallback: "/login",
   },
   {
-    paths: ["/quote"],
-    permission: "quote",
+    paths: ["/bills"],
+    permission: "bills",
     fallback: "/login",
   },
   {
     paths: ["/clients"],
     permission: "clients",
+    fallback: "/login",
+  },
+    {
+    paths: ["/invoices"],
+    permission: "invoices",
     fallback: "/login",
   },
   {
@@ -104,21 +114,6 @@ function redirectToLogin(request: NextRequest) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
-
-  // Clear legacy authentication cookies.
-  response.cookies.set({
-    name: "yj_auth",
-    value: "",
-    path: "/",
-    maxAge: 0,
-  });
-
-  response.cookies.set({
-    name: "yj_role",
-    value: "",
     path: "/",
     maxAge: 0,
   });

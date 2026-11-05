@@ -6,6 +6,10 @@ import { getFirebaseAdminServices } from "@/lib/firebaseAdmin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// ============================================================
+// 1. Configuration
+// ============================================================
+
 const VALID_ROLES = [
   "admin",
   "yjpo",
@@ -15,11 +19,45 @@ const VALID_ROLES = [
 
 const SESSION_COOKIE_NAME = "yj_session";
 
+// Permissions supported by CRM Sidebar and Proxy
+const PERMISSION_KEYS = [
+  "dashboard",
+  "quote",
+  "projects",
+  "suppliers",
+  "subcontractors",
+  "clients",
+  "purchaseOrders",
+  "bills",
+  "invoices",
+  "subInvoices",
+  "settings",
+];
+
+// ============================================================
+// 2. GET /api/me
+//
+// Authentication:
+//   Firebase Session Cookie
+//
+// Firestore:
+//   users/{uid}
+//   roles/{roleId}
+//
+// Returns:
+//   authenticated
+//   uid
+//   email
+//   role
+//   permissions
+// ============================================================
+
 export async function GET() {
   try {
     // ========================================================
-    // 1. Read session cookie
+    // 3. Read session cookie
     // ========================================================
+
     const cookieStore = await cookies();
 
     const sessionCookie = cookieStore.get(
@@ -41,12 +79,16 @@ export async function GET() {
     }
 
     // ========================================================
-    // 2. Initialize Firebase Admin
+    // 4. Initialize Firebase Admin
     // ========================================================
-const { adminAuth, adminDb } = await getFirebaseAdminServices();
+
+    const { adminAuth, adminDb } =
+      await getFirebaseAdminServices();
+
     // ========================================================
-    // 3. Verify Firebase Session Cookie
+    // 5. Verify Firebase Session Cookie
     // ========================================================
+
     const decodedToken =
       await adminAuth.verifySessionCookie(
         sessionCookie,
@@ -58,10 +100,12 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
     console.log("[API ME] Session verified:", { uid });
 
     // ========================================================
-    // 4. Read user RBAC from Firestore
+    // 6. Read Firestore User
+    //
     // Collection: users
     // Document: Firebase UID
     // ========================================================
+
     const userSnap = await adminDb
       .collection("users")
       .doc(uid)
@@ -78,11 +122,12 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
       );
     }
 
-    const userData = userSnap.data();
+    const userData = userSnap.data() || {};
 
     // ========================================================
-    // 5. Check user status
+    // 7. Check User Active Status
     // ========================================================
+
     if (userData.Active !== true) {
       return NextResponse.json(
         {
@@ -95,8 +140,9 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
     }
 
     // ========================================================
-    // 6. Read roleId from Firestore
+    // 8. Read Role ID
     // ========================================================
+
     const role = userData.roleId;
 
     if (
@@ -114,10 +160,12 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
     }
 
     // ========================================================
-    // 7. Verify role document
+    // 9. Read Firestore Role
+    //
     // Collection: roles
     // Document: roleId
     // ========================================================
+
     const roleSnap = await adminDb
       .collection("roles")
       .doc(role)
@@ -134,7 +182,11 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
       );
     }
 
-    const roleData = roleSnap.data();
+    const roleData = roleSnap.data() || {};
+
+    // ========================================================
+    // 10. Check Role Active Status
+    // ========================================================
 
     if (
       roleData.active === false ||
@@ -151,11 +203,31 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
     }
 
     // ========================================================
-    // 8. Authentication successful
+    // 11. Read and Validate Role Permissions
+    //
+    // Firestore:
+    // roles/{roleId}.permissions
+    //
+    // Only explicitly true permissions are granted.
     // ========================================================
+
+    const rawPermissions = roleData.permissions || {};
+
+    const permissions = {};
+
+    for (const key of PERMISSION_KEYS) {
+      permissions[key] =
+        rawPermissions[key] === true;
+    }
+
+    // ========================================================
+    // 12. Authentication Successful
+    // ========================================================
+
     console.log("[API ME] Authentication successful:", {
       uid,
       role,
+      permissions,
     });
 
     return NextResponse.json(
@@ -164,6 +236,7 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
         uid,
         email: decodedToken.email || userData.email || "",
         role,
+        permissions,
       },
       {
         status: 200,
