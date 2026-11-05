@@ -1439,10 +1439,6 @@ export default function PurchaseOrderDetailPage() {
                     Issued
                   </option>
 
-                  <option value="Approved">
-                    Approved
-                  </option>
-
                   <option value="Completed">
                     Completed
                   </option>

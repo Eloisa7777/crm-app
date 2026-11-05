@@ -95,7 +95,7 @@ export default function QuotePage() {
             --------------------------------------------- */
 
             status:
-              quoteData.status || "Pending Tender",
+              quoteData.status || "Quoting",
           };
         });
 
@@ -225,28 +225,24 @@ export default function QuotePage() {
                   All Status
                 </option>
 
-                <option value="Pending">
-                  Pending Tender
+                <option value="quoting">
+                  Quoting
                 </option>
 
-                <option value="Tendering">
-                  Tendering
+                <option value="underReview">
+                  Under Review
                 </option>
 
                 <option value="Submitted">
                   Submitted
                 </option>
 
-                <option value="onHold">
-                  On Hold
-                </option>
-
                 <option value="awarded">
                   Awarded
                 </option>
 
-                <option value="unsuccessful">
-                  Unsuccessful
+                <option value="lost">
+                  Lost
                 </option>
 
           </select>
@@ -430,33 +426,30 @@ export default function QuotePage() {
 function StatusBadge({ status }) {
 
   const styles = {
-    Pending:
-      "bg-blue-200 text-gray-700",
-
-    Submitted:
-      "bg-purple-200 text-blue-700",
-
-    Awarded:
-      "bg-green-200 text-green-700",
-
-    Unsuccessful:
+    quoting:
       "bg-red-200 text-red-700",
 
-    onHold:
-      "bg-orange-200 text-orange-700",
+    submitted:
+      "bg-purple-200 text-purple-700",
 
-    Tendering:
-      "bg-yellow-200 text-orange-700",
+    awarded:
+      "bg-green-200 text-green-700",
+
+    lost:
+      "bg-gray-200 text-gray-700",
+
+    underReview:
+      "bg-yellow-200 text-yellow-700",
   };
 
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
         styles[status] ||
-        styles.Pending
+        styles.quoting
       }`}
     >
-      {status || "Pending"}
+      {status || "Quoting"}
     </span>
   );
 }

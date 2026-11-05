@@ -156,8 +156,8 @@ export default function PurchaseOrdersPage() {
               Issued
             </option>
 
-            <option value="Paid">
-              Paid
+            <option value="Completed">
+              Completed
             </option>
 
             <option value="Cancelled">
@@ -349,10 +349,7 @@ function StatusBadge({ status }) {
     Issued:
       "bg-blue-200 text-blue-700",
 
-    Approved:
-      "bg-purple-200 text-purple-700",
-
-    Paid:
+    Completed:
       "bg-green-200 text-green-700",
 
     Cancelled:

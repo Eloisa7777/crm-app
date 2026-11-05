@@ -20,12 +20,11 @@ import { db } from "@/lib/firebase";
 ===================================================== */
 
 const STATUS_OPTIONS = [
-  { value: "Pending", label: "Pending Tender" },
-  { value: "Tendering", label: "Tendering" },
-  { value: "Submitted", label: "Submitted" },
-  { value: "onHold", label: "On Hold" },
+  { value: "quoting", label: "Quoting" },
+  { value: "underReview", label: "Under Review" },
+  { value: "submitted", label: "Submitted" },
   { value: "awarded", label: "Awarded" },
-  { value: "unsuccessful", label: "Unsuccessful" },
+  { value: "lost", label: "Lost" },
 ];
 
 /* =====================================================
@@ -87,7 +86,7 @@ function normalizeDateInput(value) {
 function createFormFromQuote(data) {
   return {
     projectName: data.projectName || "",
-    status: data.status || "Pending",
+    status: data.status || "quoting",
 
     dueDate: normalizeDateInput(data.dueDate),
 

@@ -32,7 +32,7 @@ export default function NewquotePage() {
     quoteNumber: "",
     projectNo: "",
     projectName: "",
-    status: "Pending",
+    status: "quoting",
 
     dueDate: new Date().toISOString().split("T")[0],
 
@@ -465,28 +465,24 @@ export default function NewquotePage() {
                 onChange={handleChange}
                 className="w-full rounded-lg border px-4 py-3"
               >
-                <option value="Pending">
-                  Pending Tender
+                <option value="quoting">
+                  Quoting
                 </option>
 
-                <option value="Tendering">
-                  Tendering
+                <option value="underReview">
+                  Under Review
                 </option>
 
-                <option value="Submitted">
+                <option value="submitted">
                   Submitted
-                </option>
-
-                <option value="onHold">
-                  On Hold
                 </option>
 
                 <option value="awarded">
                   Awarded
                 </option>
 
-                <option value="unsuccessful">
-                  Unsuccessful
+                <option value="lost">
+                  Lost
                 </option>
               </select>
             </div>
@@ -707,7 +703,7 @@ export default function NewquotePage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  C&amp;P only
+                  C&amp;P
                 </label>
 
                 <div className="relative">
@@ -728,11 +724,11 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/* C&P + Carpentry */}
+              {/* Carpentry */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  C&amp;P + Carpentry
+                  Carpentry
                 </label>
 
                 <div className="relative">
@@ -753,11 +749,11 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/* C&P + Carpentry + External work */}
+              {/*External work */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  C&amp;P + Carpentry + External work
+                  External work
                 </label>
 
                 <div className="relative">
@@ -778,7 +774,7 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/* C&P + Carpentry + Prelims */}
+              {/* Prelims */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -803,11 +799,11 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/* C&P + Carpentry + External + Prelims */}
+              {/* Package Total */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  C&amp;P + Carpentry + External + Prelims
+                  Package Total
                 </label>
 
                 <div className="relative">
