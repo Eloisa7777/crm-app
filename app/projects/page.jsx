@@ -122,14 +122,8 @@ export default function ProjectsPage() {
       case "Completed":
         return "bg-blue-100 text-blue-700";
 
-      case "On Hold":
-        return "bg-yellow-100 text-yellow-700";
-
       case "Withdraw":
         return "bg-red-100 text-red-700";
-
-      default:
-        return "bg-gray-100 text-gray-600";
     }
   };
 
@@ -175,9 +169,7 @@ export default function ProjectsPage() {
               className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
             >
               <option value="All">All Status</option>
-              <option value="Draft">Draft</option>
               <option value="Active">Active</option>
-              <option value="On Hold">On Hold</option>
               <option value="Completed">Completed</option>
               <option value="Withdraw">Withdraw</option>
             </select>

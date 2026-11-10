@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   addDoc,
@@ -38,8 +38,8 @@ export default function NewProjectPage() {
     name: "",
     clientId: "",
     clientName: "",
-    projectType: "Commercial",
-    status: "Draft",
+    projectType: "",
+    status: "Active",
     contractValue: "",
     startDate: "",
     expectedCompletion: "",
@@ -47,14 +47,36 @@ export default function NewProjectPage() {
 
     projectManager: "",
     contact: "",
-    architect: "",
-    architectContact: "",
+    ca: "",
+    caContact: "",
 
     description: "",
   });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  /* =====================================================
+     Contacts from Selected Client
+     Clients.contacts: [{ contactName, email, phone }]
+  ===================================================== */
+
+  const selectedClient = clients.find(
+    (client) => client.id === form.clientId
+  );
+
+  const clientContacts = Array.isArray(selectedClient?.contacts)
+    ? selectedClient.contacts
+    : [];
+
+  // 联系人和联系方式绑定：选择人员后，只显示该人员自己的电话 / 邮箱
+  const selectedPM = clientContacts.find(
+    (person) => person.contactName === form.projectManager
+  );
+
+  const selectedCA = clientContacts.find(
+    (person) => person.contactName === form.ca
+  );
 
   /* =====================================================
      Load Clients
@@ -132,6 +154,36 @@ export default function NewProjectPage() {
     }));
   };
 
+  // 选择 PM 后，清空旧联系方式，避免带入其他人的电话 / 邮箱
+  const handlePMChange = (e) => {
+    const value = e.target.value;
+
+    const person = clientContacts.find(
+      (item) => item.contactName === value
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      projectManager: value,
+      contact: person?.phone || person?.email || "",
+    }));
+  };
+
+  // 选择 CA 后，清空旧联系方式，避免带入其他人的电话 / 邮箱
+  const handleCAChange = (e) => {
+    const value = e.target.value;
+
+    const person = clientContacts.find(
+      (item) => item.contactName === value
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      ca: value,
+      caContact: person?.phone || person?.email || "",
+    }));
+  };
+
   /* =====================================================
      Client Change
   ===================================================== */
@@ -151,38 +203,120 @@ export default function NewProjectPage() {
         client?.companyName ||
         client?.clientName ||
         "",
+
+      // Clear contacts belonging to the previous client
+      projectManager: "",
+      contact: "",
+      ca: "",
+      caContact: "",
     }));
   };
 
-  /* =====================================================
-     Quote / Project Change
-  ===================================================== */
 
-  const handleProjectChange = (e) => {
-    const projectId = e.target.value;
+/* =====================================================
+   Quote / Project Change
+   Automatically fill Project details from Quote
+===================================================== */
 
-    const project = projects.find(
-      (item) => item.id === projectId
-    );
+const handleProjectChange = (e) => {
+  const projectId = e.target.value;
 
-    setSelectedProjectId(projectId);
+  const project = projects.find(
+    (item) => item.id === projectId
+  );
 
+  setSelectedProjectId(projectId);
+
+  // No quote selected: clear auto-filled fields
+  if (!project) {
     setForm((prev) => ({
       ...prev,
+      name: "",
+      clientId: "",
+      clientName: "",
+      projectType: "",
+      contractValue: "",
+      siteAddress: "",
+      startDate: "",
 
-      // Project Name comes from quote
-      name:
-        project?.projectName ||
-        project?.name ||
-        "",
-
-      // Automatically fill Site Address
-      siteAddress:
-        project?.siteAddress ||
-        project?.address ||
-        "",
+      // Clear contacts when the selected quote is cleared
+      projectManager: "",
+      contact: "",
+      ca: "",
+      caContact: "",
     }));
-  };
+
+    return;
+  }
+
+  // Client information from Quote
+  const clientId =
+    project.clientId ||
+    project.client?.id ||
+    "";
+
+  const matchedClient = clients.find(
+    (item) => item.id === clientId
+  );
+
+  const clientName =
+    project.client?.name ||
+    project.clientName ||
+    matchedClient?.name ||
+    matchedClient?.companyName ||
+    matchedClient?.clientName ||
+    "";
+
+  // Estimated Total Value
+  const rawContractValue = project.esttotalvalue;
+
+  const contractValue =
+    rawContractValue === undefined ||
+    rawContractValue === null ||
+    rawContractValue === ""
+      ? ""
+      : String(rawContractValue).replace(/[$,\s]/g, "");
+
+  setForm((prev) => ({
+    ...prev,
+
+    // Project Name
+    name: project.projectName || "",
+
+    // Client
+    clientId,
+    clientName,
+
+    // Clear contacts from the previously selected client
+    projectManager: "",
+    contact: "",
+    ca: "",
+    caContact: "",
+
+    // Project Type
+    projectType:
+      project.projectType || "",
+
+    // Contract Value = Est. Total Value
+    contractValue,
+
+    // Site Address
+    siteAddress:
+      project.siteAddress ||
+      project.address ||
+      "",
+
+      // Start Date = EST. Start Date
+      startDate: project.estStartDate
+        ? (
+            typeof project.estStartDate.toDate === "function"
+              ? project.estStartDate.toDate().toISOString().slice(0, 10)
+              : String(project.estStartDate).slice(0, 10)
+          )
+        : "",
+  }));
+};
+
 
   /* =====================================================
      Submit
@@ -241,11 +375,11 @@ export default function NewProjectPage() {
         contact:
           form.contact.trim(),
 
-        architect:
-          form.architect.trim(),
+        ca:
+          form.ca.trim(),
 
-        architectContact:
-          form.architectContact.trim(),
+        caContact:
+          form.caContact.trim(),
 
         description:
           form.description.trim(),
@@ -382,6 +516,9 @@ export default function NewProjectPage() {
                     onChange={handleChange}
                     className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                   >
+
+                     <option value="">Select Project Type</option>
+
                     <option value="Commercial">
                       Commercial
                     </option>
@@ -392,10 +529,6 @@ export default function NewProjectPage() {
 
                     <option value="Renovation">
                       Renovation
-                    </option>
-
-                    <option value="Retail">
-                      Retail
                     </option>
 
                     <option value="Fit-out">
@@ -416,9 +549,7 @@ export default function NewProjectPage() {
                     onChange={handleChange}
                     className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                   >
-                    <option value="Draft">Draft</option>
                     <option value="Active">Active</option>
-                    <option value="On Hold">On Hold</option>
                     <option value="Completed">Completed</option>
                     <option value="Withdraw">Withdraw</option>
                   </select>
@@ -509,68 +640,130 @@ export default function NewProjectPage() {
 
               <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
 
-                {/* Project Manager / CA */}
+                {/* Project Manager*/}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Project Manager / CA
+                    Project Manager
                   </label>
 
-                  <input
-                    name="projectManager"
-                    type="text"
+                  <select
+                    name="ProjectManager"
                     value={form.projectManager}
-                    onChange={handleChange}
-                    placeholder="Enter project manager / CA"
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
-                  />
+                    onChange={handlePMChange}
+                    disabled={!form.clientId || clientContacts.length === 0}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black disabled:bg-gray-100"
+                  >
+                    <option value="">
+                      {!form.clientId
+                        ? "Select Client First"
+                        : clientContacts.length === 0
+                          ? "No Contacts Available"
+                          : "Select Contact"}
+                    </option>
+
+                    {clientContacts.map((person, index) => (
+                      <option
+                        key={`pm-${index}`}
+                        value={person.contactName || ""}
+                      >
+                        {person.contactName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* PM / CA Contact */}
+                {/* PM Contact */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    PM / CA Contact
+                    PM Contact
                   </label>
 
-                  <input
+                  <select
                     name="contact"
-                    type="text"
                     value={form.contact}
                     onChange={handleChange}
-                    placeholder="Phone or email"
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
-                  />
+                    disabled={!selectedPM || (!selectedPM.phone && !selectedPM.email)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black disabled:bg-gray-100"
+                  >
+                    <option value="">
+                      {form.projectManager ? "No phone / email available" : "Select PM first"}
+                    </option>
+
+                    {selectedPM?.phone && (
+                      <option value={selectedPM.phone}>
+                        {selectedPM.phone}
+                      </option>
+                    )}
+
+                    {selectedPM?.email && (
+                      <option value={selectedPM.email}>
+                        {selectedPM.email}
+                      </option>
+                    )}
+                  </select>
                 </div>
 
-                {/* Architect */}
+                {/* CA */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Architect
+                    CA
                   </label>
 
-                  <input
-                    name="architect"
-                    type="text"
-                    value={form.architect}
-                    onChange={handleChange}
-                    placeholder="Enter architect"
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
-                  />
+                  <select
+                    name="Contract Administrator"
+                    value={form.ca}
+                    onChange={handleCAChange}
+                    disabled={!form.clientId || clientContacts.length === 0}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black disabled:bg-gray-100"
+                  >
+                    <option value="">
+                      {!form.clientId
+                        ? "Select Client First"
+                        : clientContacts.length === 0
+                          ? "No Contacts Available"
+                          : "Select Contact"}
+                    </option>
+
+                    {clientContacts.map((person, index) => (
+                      <option
+                        key={`ca-${index}`}
+                        value={person.contactName || ""}
+                      >
+                        {person.contactName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Architect Contact */}
+                {/* CA Contact */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Architect Contact
+                    CA Contact
                   </label>
 
-                  <input
-                    name="architectContact"
-                    type="text"
-                    value={form.architectContact}
+                  <select
+                    name="CA Contact"
+                    value={form.caContact}
                     onChange={handleChange}
-                    placeholder="Phone or email"
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-black"
-                  />
+                    disabled={!selectedCA || (!selectedCA.phone && !selectedCA.email)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black disabled:bg-gray-100"
+                  >
+                    <option value="">
+                      {form.ca ? "No phone / email available" : "Select CA first"}
+                    </option>
+
+                    {selectedCA?.phone && (
+                      <option value={selectedCA.phone}>
+                        {selectedCA.phone}
+                      </option>
+                    )}
+
+                    {selectedCA?.email && (
+                      <option value={selectedCA.email}>
+                        {selectedCA.email}
+                      </option>
+                    )}
+                  </select>
                 </div>
 
               </div>

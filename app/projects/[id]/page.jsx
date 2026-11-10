@@ -33,18 +33,22 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [editing, setEditing] = useState(false);
 
-  const [editForm, setEditForm] = useState({
-    name: "",
-    clientId: "",
-    clientName: "",
-    projectType: "",
-    status: "",
-    contractValue: "",
-    startDate: "",
-    expectedCompletion: "",
-    siteAddress: "",
-    description: "",
-  });
+const [editForm, setEditForm] = useState({
+  name: "",
+  clientId: "",
+  clientName: "",
+  projectType: "",
+  status: "",
+  contractValue: "",
+  startDate: "",
+  expectedCompletion: "",
+  siteAddress: "",
+  description: "",
+  projectManager: "",
+  contact: "",
+  ca: "",
+  caContact: "",
+});
 
   /* =====================================================
      Load Project + Clients + Projects + PO + Invoices
@@ -227,10 +231,10 @@ export default function ProjectDetailPage() {
         project.projectManager || "",
       contact:
         project.contact || "",
-      architect:
-        project.architect || "",
-      architectContact:
-        project.architectContact || "",
+      ca:
+        project.ca || "",
+      caContact:
+        project.caContact || "",
     });
 
     setEditing(true);
@@ -250,28 +254,133 @@ export default function ProjectDetailPage() {
   };
 
   /* =====================================================
-     Client Change
-  ===================================================== */
+   Selected Client Contacts
+===================================================== */
 
-  const handleClientChange = (e) => {
-    const clientId = e.target.value;
+const selectedClient = clients.find(
+  (item) => item.id === editForm.clientId
+);
 
-    const client = clients.find(
-      (item) => item.id === clientId
-    );
+const clientContacts = Array.isArray(selectedClient?.contacts)
+  ? selectedClient.contacts
+  : [];
 
-    const clientName =
-      client?.name ||
-      client?.companyName ||
-      client?.clientName ||
-      "";
+const selectedPM = clientContacts.find(
+  (person) =>
+    person.contactName === editForm.projectManager
+);
 
-    setEditForm((prev) => ({
-      ...prev,
-      clientId,
-      clientName,
-    }));
-  };
+const selectedCA = clientContacts.find(
+  (person) =>
+    person.contactName === editForm.ca
+);
+
+/* =====================================================
+   Contact Options
+===================================================== */
+
+const getContactOptions = (person) => {
+  if (!person) return [];
+
+  const options = [];
+
+  if (person.phone) {
+    options.push({
+      value: person.phone,
+      label: `${person.contactName} - ${person.phone}`,
+    });
+  }
+
+  if (person.email) {
+    options.push({
+      value: person.email,
+      label: `${person.contactName} - ${person.email}`,
+    });
+  }
+
+  return options;
+};
+/* =====================================================
+   Client Change
+===================================================== */
+
+const handleClientChange = (e) => {
+  const clientId = e.target.value;
+
+  const client = clients.find(
+    (item) => item.id === clientId
+  );
+
+  const clientName =
+    client?.name ||
+    client?.companyName ||
+    client?.clientName ||
+    "";
+
+  setEditForm((prev) => ({
+    ...prev,
+    clientId,
+    clientName,
+
+    // Clear previous client contacts
+    projectManager: "",
+    contact: "",
+    ca: "",
+    caContact: "",
+  }));
+};
+
+/* =====================================================
+   Contact Person Change
+===================================================== */
+
+const handlePMChange = (e) => {
+  const personName = e.target.value;
+
+  const person = clientContacts.find(
+    (item) => item.contactName === personName
+  );
+
+  const defaultContact =
+    person?.phone || person?.email || "";
+
+  setEditForm((prev) => ({
+    ...prev,
+    projectManager: personName,
+    contact: defaultContact,
+  }));
+};
+
+const handlePMContactChange = (e) => {
+  setEditForm((prev) => ({
+    ...prev,
+    contact: e.target.value,
+  }));
+};
+
+const handleCAChange = (e) => {
+  const personName = e.target.value;
+
+  const person = clientContacts.find(
+    (item) => item.contactName === personName
+  );
+
+  const defaultContact =
+    person?.phone || person?.email || "";
+
+  setEditForm((prev) => ({
+    ...prev,
+    ca: personName,
+    caContact: defaultContact,
+  }));
+};
+
+const handleCAContactChange = (e) => {
+  setEditForm((prev) => ({
+    ...prev,
+    caContact: e.target.value,
+  }));
+};
 
   /* =====================================================
      Save Project
@@ -327,11 +436,11 @@ export default function ProjectDetailPage() {
         contact:
           editForm.contact || "",
 
-        architect:
-          editForm.architect || "",
+        ca:
+          editForm.ca || "",
 
-        architectContact:
-          editForm.architectContact || "",
+        caContact:
+          editForm.caContact || "",
 
         description:
           editForm.description.trim(),
@@ -844,16 +953,9 @@ export default function ProjectDetailPage() {
                             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
                           >
 
-                            <option value="Draft">
-                              Draft
-                            </option>
 
                             <option value="Active">
                               Active
-                            </option>
-
-                            <option value="On Hold">
-                              On Hold
                             </option>
 
                             <option value="Completed">
@@ -969,106 +1071,106 @@ export default function ProjectDetailPage() {
                         {/* Project Manager */}
 
                         <div>
-
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Project Manager / CA
+                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                            Project Manager 
                           </label>
 
-                          <input
-                            type="text"
-                            value={
-                              editForm.projectManager
-                            }
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                projectManager:
-                                  e.target.value,
-                              })
-                            }
-                            placeholder="Enter project manager / CA"
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                          />
+                          <select
+                            value={editForm.projectManager || ""}
+                            onChange={handlePMChange}
+                            disabled={!editForm.clientId || clientContacts.length === 0}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none disabled:bg-gray-100"
+                          >
+                            <option value="">Select Project Manager </option>
 
+                            {clientContacts.map((person, index) => (
+                              <option
+                                key={`${person.contactName}-${index}`}
+                                value={person.contactName}
+                              >
+                                {person.contactName}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
-                        {/* PM / CA Contact */}
+                        {/* PM Contact */}
 
                         <div>
-
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            PM / CA Contact
+                          <label className="mb-1 block text-sm font-medium text-gray-700">
+                            PM Contact
                           </label>
 
-                          <input
-                            type="text"
-                            value={
-                              editForm.contact
-                            }
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                contact:
-                                  e.target.value,
-                              })
-                            }
-                            placeholder="Phone or email"
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                          />
+                          <select
+                            value={editForm.contact || ""}
+                            onChange={handlePMContactChange}
+                            disabled={!selectedPM}
+                            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none disabled:bg-gray-100"
+                          >
+                            <option value="">Select Phone / Email</option>
 
+                            {getContactOptions(selectedPM).map((option, index) => (
+                              <option
+                                key={`${option.value}-${index}`}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
-                        {/* Architect */}
+                          {/* Contract Admin */}
 
-                        <div>
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-700">
+                              Contract Admin
+                            </label>
 
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Architect
-                          </label>
+                            <select
+                              value={editForm.ca || ""}
+                              onChange={handleCAChange}
+                              disabled={!editForm.clientId || clientContacts.length === 0}
+                              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none disabled:bg-gray-100"
+                            >
+                              <option value="">Select Contract Admin</option>
 
-                          <input
-                            type="text"
-                            value={
-                              editForm.architect
-                            }
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                architect:
-                                  e.target.value,
-                              })
-                            }
-                            placeholder="Enter architect"
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                          />
+                              {clientContacts.map((person, index) => (
+                                <option
+                                  key={`${person.contactName}-${index}`}
+                                  value={person.contactName}
+                                >
+                                  {person.contactName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        </div>
+                          {/* Contract Admin Contact */}
 
-                        {/* Architect Contact */}
+                          <div>
+                            <label className="mb-1 block text-sm font-medium text-gray-700">
+                              Contract Admin Contact
+                            </label>
 
-                        <div>
+                            <select
+                              value={editForm.caContact || ""}
+                              onChange={handleCAContactChange}
+                              disabled={!selectedCA}
+                              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none disabled:bg-gray-100"
+                            >
+                              <option value="">Select Phone / Email</option>
 
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Architect Contact
-                          </label>
-
-                          <input
-                            type="text"
-                            value={
-                              editForm.architectContact
-                            }
-                            onChange={(e) =>
-                              setEditForm({
-                                ...editForm,
-                                architectContact:
-                                  e.target.value,
-                              })
-                            }
-                            placeholder="Phone or email"
-                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                          />
-
-                        </div>
+                              {getContactOptions(selectedCA).map((option, index) => (
+                                <option
+                                  key={`${option.value}-${index}`}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
                         {/* Description */}
 
@@ -1197,7 +1299,7 @@ export default function ProjectDetailPage() {
                       />
 
                       <InfoRow
-                        label="Project Manager/ CA"
+                        label="Project Manager"
                         value={
                           project.projectManager ||
                           "-"
@@ -1205,7 +1307,7 @@ export default function ProjectDetailPage() {
                       />
 
                       <InfoRow
-                        label="PM/CA Contact"
+                        label="PM Contact"
                         value={
                           project.contact ||
                           "-"
@@ -1213,17 +1315,17 @@ export default function ProjectDetailPage() {
                       />
 
                       <InfoRow
-                        label="Architect"
+                        label="CA"
                         value={
-                          project.architect ||
+                          project.ca ||
                           "-"
                         }
                       />
 
                       <InfoRow
-                        label="Architect Contact"
+                        label="CA Contact"
                         value={
-                          project.architectContact ||
+                          project.caContact ||
                           "-"
                         }
                       />
