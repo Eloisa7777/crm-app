@@ -37,9 +37,7 @@ export default function ClientDetailsPage() {
   const [form, setForm] = useState({
     name: "",
     abn: "",
-    contact: "",
-    email: "",
-    phone: "",
+    contacts: [],
     address: "",
     status: "Active",
   });
@@ -79,9 +77,15 @@ export default function ClientDetailsPage() {
         setForm({
           name: data.name || "",
           abn: data.abn || "",
-          contact: data.contact || "",
-          email: data.email || "",
-          phone: data.phone || "",
+
+          contacts: Array.isArray(data.contacts)
+            ? data.contacts.map((item) => ({
+                contactName: item.contactName || "",
+                email: item.email || "",
+                phone: item.phone || "",
+              }))
+            : [],
+
           address: data.address || "",
           status: data.status || "Active",
         });
@@ -100,110 +104,148 @@ export default function ClientDetailsPage() {
     loadClient();
   }, [params?.id]);
 
-  /* =====================================================
-     Load Client Projects
-  ===================================================== */
+    /* =====================================================
+      Load Client Projects
+    ===================================================== */
 
-  useEffect(() => {
-    async function loadProjects() {
-      if (!params?.id) return;
+    useEffect(() => {
+      async function loadProjects() {
+        if (!params?.id) return;
 
-      try {
-        setLoadingProjects(true);
+        try {
+          setLoadingProjects(true);
 
-        const projectRef = collection(
-          db,
-          "projects"
-        );
+          const projectRef = collection(
+            db,
+            "projects"
+          );
 
-        const q = query(
-          projectRef,
-          where("clientId", "==", params.id)
-        );
+          const q = query(
+            projectRef,
+            where("clientId", "==", params.id)
+          );
 
-        const snapshot = await getDocs(q);
+          const snapshot = await getDocs(q);
 
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+          const data = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
 
-        setProjects(data);
-      } catch (error) {
-        console.error(
-          "Failed to load projects:",
-          error
-        );
+          setProjects(data);
+        } catch (error) {
+          console.error(
+            "Failed to load projects:",
+            error
+          );
 
-        setError(
-          error.message ||
-            "Failed to load projects."
-        );
-      } finally {
-        setLoadingProjects(false);
+          setError(
+            error.message ||
+              "Failed to load projects."
+          );
+        } finally {
+          setLoadingProjects(false);
+        }
       }
+
+      loadProjects();
+    }, [params?.id]);
+
+    /* =====================================================
+      Load Client Invoices
+    ===================================================== */
+
+    useEffect(() => {
+      async function loadInvoices() {
+        if (!params?.id) return;
+
+        try {
+          setLoadingInvoices(true);
+
+          const invoiceRef = collection(
+            db,
+            "invoices"
+          );
+
+          const q = query(
+            invoiceRef,
+            where("clientId", "==", params.id)
+          );
+
+          const snapshot = await getDocs(q);
+
+          const data = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+
+          setInvoices(data);
+        } catch (error) {
+          console.error(
+            "Failed to load invoices:",
+            error
+          );
+
+          setError(
+            error.message ||
+              "Failed to load invoices."
+          );
+        } finally {
+          setLoadingInvoices(false);
+        }
+      }
+
+      loadInvoices();
+    }, [params?.id]);
+
+    /* =====================================================
+      Update Form
+    ===================================================== */
+
+    function updateForm(field, value) {
+      setForm((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
     }
 
-    loadProjects();
-  }, [params?.id]);
+    /* =====================================================
+      Contact Management
+    ===================================================== */
 
-  /* =====================================================
-     Load Client Invoices
-  ===================================================== */
-
-  useEffect(() => {
-    async function loadInvoices() {
-      if (!params?.id) return;
-
-      try {
-        setLoadingInvoices(true);
-
-        const invoiceRef = collection(
-          db,
-          "invoices"
-        );
-
-        const q = query(
-          invoiceRef,
-          where("clientId", "==", params.id)
-        );
-
-        const snapshot = await getDocs(q);
-
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        setInvoices(data);
-      } catch (error) {
-        console.error(
-          "Failed to load invoices:",
-          error
-        );
-
-        setError(
-          error.message ||
-            "Failed to load invoices."
-        );
-      } finally {
-        setLoadingInvoices(false);
-      }
+    function updateContact(index, field, value) {
+      setForm((prev) => ({
+        ...prev,
+        contacts: prev.contacts.map((item, i) =>
+          i === index
+            ? { ...item, [field]: value }
+            : item
+        ),
+      }));
     }
 
-    loadInvoices();
-  }, [params?.id]);
+    function addContact() {
+      setForm((prev) => ({
+        ...prev,
+        contacts: [
+          ...prev.contacts,
+          {
+            contactName: "",
+            email: "",
+            phone: "",
+          },
+        ],
+      }));
+    }
 
-  /* =====================================================
-     Update Form
-  ===================================================== */
-
-  function updateForm(field, value) {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  }
+    function removeContact(index) {
+      setForm((prev) => ({
+        ...prev,
+        contacts: prev.contacts.filter(
+          (_, i) => i !== index
+        ),
+      }));
+    }
 
   /* =====================================================
      Save Client
@@ -226,9 +268,20 @@ export default function ClientDetailsPage() {
       const updatedData = {
         name: form.name.trim(),
         abn: form.abn.trim(),
-        contact: form.contact.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
+
+        contacts: form.contacts
+          .map((item) => ({
+            contactName: item.contactName.trim(),
+            email: item.email.trim(),
+            phone: item.phone.trim(),
+          }))
+          .filter(
+            (item) =>
+              item.contactName ||
+              item.email ||
+              item.phone
+          ),
+
         address: form.address.trim(),
         status: form.status,
       };
@@ -268,19 +321,24 @@ export default function ClientDetailsPage() {
      Cancel Edit
   ===================================================== */
 
-  function handleCancelEdit() {
-    setForm({
-      name: client.name || "",
-      abn: client.abn || "",
-      contact: client.contact || "",
-      email: client.email || "",
-      phone: client.phone || "",
-      address: client.address || "",
-      status: client.status || "Active",
-    });
+    function handleCancelEdit() {
+      setForm({
+        name: client.name || "",
+        abn: client.abn || "",
+       address: client.address || "",
+        status: client.status || "Active",
 
-    setEditing(false);
-  }
+        contacts: Array.isArray(client.contacts)
+          ? client.contacts.map((item) => ({
+              contactName: item.contactName || "",
+              email: item.email || "",
+              phone: item.phone || "",
+            }))
+          : [],
+      });
+
+      setEditing(false);
+    }
 
   /* =====================================================
      Loading
@@ -533,32 +591,6 @@ export default function ClientDetailsPage() {
                       updateForm("abn", value)
                     }
                   />
-
-                  <EditField
-                    label="Contact Name"
-                    value={form.contact}
-                    onChange={(value) =>
-                      updateForm("contact", value)
-                    }
-                  />
-
-                  <EditField
-                    label="Email"
-                    type="email"
-                    value={form.email}
-                    onChange={(value) =>
-                      updateForm("email", value)
-                    }
-                  />
-
-                  <EditField
-                    label="Phone"
-                    value={form.phone}
-                    onChange={(value) =>
-                      updateForm("phone", value)
-                    }
-                  />
-
                   <div>
                     <label className="text-xs font-medium text-gray-400 uppercase">
                       Address
@@ -601,6 +633,143 @@ export default function ClientDetailsPage() {
                       </option>
                     </select>
                   </div>
+
+                    {/* =================================================
+                        Contacts
+                    ================================================= */}
+
+                    <div>
+
+                      <div className="flex items-center justify-between mb-3">
+
+                        <label className="text-xs font-medium text-gray-400 uppercase">
+                          Contacts
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={addContact}
+                          className="text-sm font-medium text-indigo-700 hover:text-indigo-900 cursor-pointer"
+                        >
+                          + Add Contact
+                        </button>
+
+                      </div>
+
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+
+                        <table className="w-full text-sm">
+
+                          <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200 text-left">
+
+                              <th className="px-3 py-3 text-xs font-medium text-gray-500">
+                                Contact Name
+                              </th>
+
+                              <th className="px-3 py-3 text-xs font-medium text-gray-500">
+                                Email
+                              </th>
+
+                              <th className="px-3 py-3 text-xs font-medium text-gray-500">
+                                Phone
+                              </th>
+
+                              <th className="px-2 py-3"></th>
+
+                            </tr>
+                          </thead>
+
+                          <tbody>
+
+                            {form.contacts.map((item, index) => (
+
+                              <tr
+                                key={index}
+                                className="border-b border-gray-100 last:border-0"
+                              >
+
+                                <td className="p-2">
+                                  <input
+                                    type="text"
+                                    value={item.contactName}
+                                    onChange={(e) =>
+                                      updateContact(
+                                        index,
+                                        "contactName",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="Name"
+                                    className="w-full min-w-28 rounded border border-gray-300 px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                                  />
+                                </td>
+
+                                <td className="p-2">
+                                  <input
+                                    type="email"
+                                    value={item.email}
+                                    onChange={(e) =>
+                                      updateContact(
+                                        index,
+                                        "email",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="Email"
+                                    className="w-full min-w-32 rounded border border-gray-300 px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                                  />
+                                </td>
+
+                                <td className="p-2">
+                                  <input
+                                    type="text"
+                                    value={item.phone}
+                                    onChange={(e) =>
+                                      updateContact(
+                                        index,
+                                        "phone",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="Phone"
+                                    className="w-full min-w-28 rounded border border-gray-300 px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                                  />
+                                </td>
+
+                                <td className="px-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeContact(index)}
+                                    className="text-red-500 hover:text-red-700 cursor-pointer"
+                                    title="Remove contact"
+                                  >
+                                    ×
+                                  </button>
+                                </td>
+
+                              </tr>
+
+                            ))}
+
+                            {form.contacts.length === 0 && (
+                              <tr>
+                                <td
+                                  colSpan="4"
+                                  className="px-4 py-6 text-center text-sm text-gray-400"
+                                >
+                                  No contacts added.
+                                </td>
+                              </tr>
+                            )}
+
+                          </tbody>
+
+                        </table>
+
+                      </div>
+
+                    </div>
                 </>
               ) : (
                 <>
@@ -615,24 +784,101 @@ export default function ClientDetailsPage() {
                   />
 
                   <InfoItem
-                    label="Contact Name"
-                    value={client.contact}
-                  />
-
-                  <InfoItem
-                    label="Email"
-                    value={client.email}
-                  />
-
-                  <InfoItem
-                    label="Phone"
-                    value={client.phone}
-                  />
-
-                  <InfoItem
                     label="Address"
                     value={client.address}
                   />
+
+                  <InfoItem
+                    label="Status"
+                    value={client.status}
+                  />
+    {/* =================================================
+                      Contacts Display
+                  ================================================= */}
+
+                  <div>
+
+                    <div className="flex items-center justify-between mb-3">
+
+                      <label className="text-xs font-medium text-gray-400 uppercase">
+                        Contacts
+                      </label>
+
+                    </div>
+
+                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
+
+                      <table className="w-full text-sm">
+
+                        <thead>
+                          <tr className="bg-gray-50 border-b border-gray-200 text-left">
+
+                            <th className="px-3 py-3 text-xs font-medium text-gray-500">
+                              Contact Name
+                            </th>
+
+                            <th className="px-3 py-3 text-xs font-medium text-gray-500">
+                              Email
+                            </th>
+
+                            <th className="px-3 py-3 text-xs font-medium text-gray-500">
+                              Phone
+                            </th>
+
+                            <th className="px-2 py-3"></th>
+
+                          </tr>
+                        </thead>
+
+                        <tbody>
+
+                          {client.contacts?.length > 0 ? (
+
+                            client.contacts.map((item, index) => (
+
+                              <tr
+                                key={index}
+                                className="border-b border-gray-100 last:border-0"
+                              >
+
+                                <td className="px-3 py-3 text-sm text-gray-900">
+                                  {item.contactName || "-"}
+                                </td>
+
+                                <td className="px-3 py-3 text-sm text-gray-600">
+                                  {item.email || "-"}
+                                </td>
+
+                                <td className="px-3 py-3 text-sm text-gray-600">
+                                  {item.phone || "-"}
+                                </td>
+
+                                <td className="px-2 py-3"></td>
+
+                              </tr>
+
+                            ))
+
+                          ) : (
+
+                            <tr>
+                              <td
+                                colSpan="4"
+                                className="px-4 py-6 text-center text-sm text-gray-400"
+                              >
+                                No contacts found.
+                              </td>
+                            </tr>
+
+                          )}
+
+                        </tbody>
+
+                      </table>
+
+                    </div>
+
+                  </div>
                 </>
               )}
 
@@ -1002,12 +1248,6 @@ function StatusBadge({ status }) {
 
     Issued:
       "bg-blue-200 text-blue-700",
-
-    Approved:
-      "bg-purple-200 text-purple-700",
-
-    Completed:
-      "bg-orange-200 text-orange-700",
 
     Paid:
       "bg-green-200 text-green-700",

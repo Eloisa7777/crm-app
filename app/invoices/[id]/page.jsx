@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+
 import {
   doc,
   getDoc,
@@ -40,23 +41,53 @@ export default function InvoiceDetailPage() {
           collection(db, "projects")
         );
 
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        setProjects(data);
-      } catch (error) {
-        console.error(
-          "Failed to load projects:",
-          error
+        setProjects(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            ...item.data(),
+          }))
         );
+      } catch (error) {
+        console.error("Failed to load projects:", error);
       } finally {
         setLoadingProjects(false);
       }
     }
 
     loadProjects();
+  }, []);
+
+  /* =====================================================
+     Clients
+  ===================================================== */
+
+  const [clients, setClients] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+
+  useEffect(() => {
+    async function loadClients() {
+      try {
+        const snapshot = await getDocs(
+          collection(db, "Clients")
+        );
+
+        const data = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+          contacts: Array.isArray(item.data().contacts)
+            ? item.data().contacts
+            : [],
+        }));
+
+        setClients(data);
+      } catch (error) {
+        console.error("Failed to load clients:", error);
+      } finally {
+        setLoadingClients(false);
+      }
+    }
+
+    loadClients();
   }, []);
 
   /* =====================================================
@@ -78,10 +109,12 @@ export default function InvoiceDetailPage() {
       id: "",
       name: "",
       abn: "",
-      contact: "",
-      email: "",
-      phone: "",
       address: "",
+      selectedContact: {
+        contactName: "",
+        email: "",
+        phone: "",
+      },
     },
 
     clientId: "",
@@ -105,11 +138,55 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState("");
 
   /* =====================================================
+     Helper: Normalize Client
+  ===================================================== */
+
+  function normalizeClient(client) {
+    return {
+      id: client?.id || "",
+      name: client?.name || "",
+      abn: client?.abn || "",
+      address: client?.address || "",
+
+      selectedContact: {
+        contactName:
+          client?.selectedContact?.contactName || "",
+
+        email:
+          client?.selectedContact?.email || "",
+
+        phone:
+          client?.selectedContact?.phone || "",
+      },
+    };
+  }
+
+  /* =====================================================
+     Helper: Normalize Invoice Items
+  ===================================================== */
+
+  function normalizeItems(items) {
+    return Array.isArray(items)
+      ? items.map((item) => ({
+          description: item?.description || "",
+          qty: Number(item?.qty) || 0,
+          unitPrice: Number(item?.unitPrice) || 0,
+          tax: Number(item?.tax) || 0,
+        }))
+      : [];
+  }
+
+  /* =====================================================
      Load Invoice
+
+     Wait until Clients are loaded so that the
+     corresponding Client and Contact can be matched.
   ===================================================== */
 
   useEffect(() => {
-    const loadInvoice = async () => {
+    if (loadingClients) return;
+
+    async function loadInvoice() {
       if (!params?.id) return;
 
       try {
@@ -137,36 +214,45 @@ export default function InvoiceDetailPage() {
         setInvoice(data);
 
         /* -----------------------------------------------
-           Client
+           Find Original Client
         ----------------------------------------------- */
 
-        const client =
-          typeof data.client === "object" &&
-          data.client !== null
-            ? data.client
-            : {
-                name: data.client || "",
-              };
+        const originalClientId =
+          data.client?.id ||
+          data.clientId ||
+          "";
+
+        const clientRecord = clients.find(
+          (item) => item.id === originalClientId
+        );
+
+        const savedContact = {
+          contactName:
+            data.client?.selectedContact?.contactName || "",
+
+          email:
+            data.client?.selectedContact?.email || "",
+
+          phone:
+            data.client?.selectedContact?.phone || "",
+        };
+
+        const client = clientRecord
+          ? normalizeClient({
+              ...clientRecord,
+              selectedContact: savedContact,
+            })
+          : normalizeClient({
+              ...data.client,
+              id: originalClientId,
+              selectedContact: savedContact,
+            });
 
         /* -----------------------------------------------
            Items
         ----------------------------------------------- */
 
-        const items = Array.isArray(data.items)
-          ? data.items.map((item) => ({
-              description:
-                item?.description || "",
-
-              qty:
-                Number(item?.qty) || 0,
-
-              unitPrice:
-                Number(item?.unitPrice) || 0,
-
-              tax:
-                Number(item?.tax) || 0,
-            }))
-          : [];
+        const items = normalizeItems(data.items);
 
         /* -----------------------------------------------
            Form
@@ -176,13 +262,6 @@ export default function InvoiceDetailPage() {
           invoiceNumber:
             data.invoiceNumber || "",
 
-          /*
-             New invoices:
-             projectId + projectName
-
-             Old invoices:
-             projectName only
-          */
           projectId:
             data.projectId || "",
 
@@ -200,33 +279,10 @@ export default function InvoiceDetailPage() {
           dueDate:
             data.dueDate || "",
 
-          client: {
-            id:
-              client?.id || "",
-
-            name:
-              client?.name || "",
-
-            abn:
-              client?.abn || "",
-
-            contact:
-              client?.contact || "",
-
-            email:
-              client?.email || "",
-
-            phone:
-              client?.phone || "",
-
-            address:
-              client?.address || "",
-          },
+          client,
 
           clientId:
-            data.clientId ||
-            client?.id ||
-            "",
+            originalClientId,
 
           poNumber:
             data.poNumber || "",
@@ -237,32 +293,67 @@ export default function InvoiceDetailPage() {
             data.notes || "",
 
           accountManager:
-            data.accountManager ||
-            data.projectManager ||
-            "",
+            data.accountManager || "",
 
           accountManagerEmail:
-            data.accountManagerEmail ||
-            data.projectManagerEmail ||
-            "",
+            data.accountManagerEmail || "",
         });
       } catch (err) {
-        console.error(
-          "Failed to load invoice:",
-          err
-        );
+        console.error("Failed to load invoice:", err);
 
         setError(
-          err.message ||
-            "Failed to load invoice."
+          err.message || "Failed to load invoice."
         );
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     loadInvoice();
-  }, [params?.id]);
+  }, [params?.id, loadingClients, clients]);
+
+  /* =====================================================
+     Current Selected Client
+  ===================================================== */
+
+  const selectedClient = useMemo(() => {
+    return clients.find(
+      (client) => client.id === form.client.id
+    ) || null;
+  }, [clients, form.client.id]);
+
+  /* =====================================================
+     Current Client Contacts
+  ===================================================== */
+
+  const clientContacts = useMemo(() => {
+    return selectedClient &&
+      Array.isArray(selectedClient.contacts)
+      ? selectedClient.contacts
+      : [];
+  }, [selectedClient]);
+
+  /* =====================================================
+     Current Selected Contact Index
+  ===================================================== */
+
+  const selectedContactIndex = useMemo(() => {
+    const selected = form.client.selectedContact;
+
+    if (!selected.contactName) return "";
+
+    const index = clientContacts.findIndex(
+      (contact) =>
+        contact.contactName === selected.contactName &&
+        contact.email === selected.email &&
+        contact.phone === selected.phone
+    );
+
+    return index >= 0 ? String(index) : "";
+  }, [
+    clientContacts,
+    form.client.selectedContact,
+  ]);
 
   /* =====================================================
      Generic Form Update
@@ -291,24 +382,87 @@ export default function InvoiceDetailPage() {
 
     setForm((prev) => ({
       ...prev,
-
       projectId,
-
       projectName,
     }));
   }
 
   /* =====================================================
      Client Update
+
+     Changing Client automatically:
+     1. Updates Client information
+     2. Clears the previous Contact
+     3. Requires a new Contact selection
   ===================================================== */
 
-  function updateClient(field, value) {
+  function handleClientChange(clientId) {
+    const client = clients.find(
+      (item) => item.id === clientId
+    );
+
+    if (!client) return;
+
+    setForm((prev) => ({
+      ...prev,
+
+      clientId: client.id,
+
+      client: {
+        id: client.id,
+        name: client.name || "",
+        abn: client.abn || "",
+        address: client.address || "",
+
+        // Clear previous Contact
+        selectedContact: {
+          contactName: "",
+          email: "",
+          phone: "",
+        },
+      },
+    }));
+  }
+
+  /* =====================================================
+     Contact Update
+
+     Contact is selected from the current Client's
+     contacts array.
+  ===================================================== */
+
+  function handleContactChange(contactIndex) {
+    if (contactIndex === "") {
+      setForm((prev) => ({
+        ...prev,
+        client: {
+          ...prev.client,
+          selectedContact: {
+            contactName: "",
+            email: "",
+            phone: "",
+          },
+        },
+      }));
+
+      return;
+    }
+
+    const contact = clientContacts[Number(contactIndex)];
+
+    if (!contact) return;
+
     setForm((prev) => ({
       ...prev,
 
       client: {
         ...prev.client,
-        [field]: value,
+
+        selectedContact: {
+          contactName: contact.contactName || "",
+          email: contact.email || "",
+          phone: contact.phone || "",
+        },
       },
     }));
   }
@@ -343,7 +497,6 @@ export default function InvoiceDetailPage() {
 
       items: [
         ...prev.items,
-
         {
           description: "",
           qty: 1,
@@ -363,38 +516,43 @@ export default function InvoiceDetailPage() {
       ...prev,
 
       items: prev.items.filter(
-        (_, itemIndex) =>
-          itemIndex !== index
+        (_, itemIndex) => itemIndex !== index
       ),
     }));
   }
+
+  /* =====================================================
+     Calculated Items
+  ===================================================== */
+
+  const calculatedItems = useMemo(() => {
+    return form.items.map((item) => {
+      const qty = Number(item?.qty) || 0;
+      const unitPrice = Number(item?.unitPrice) || 0;
+      const tax = Number(item?.tax) || 0;
+
+      const lineSubtotal = qty * unitPrice;
+
+      return {
+        ...item,
+        qty,
+        unitPrice,
+        tax,
+        total: lineSubtotal * (1 + tax / 100),
+      };
+    });
+  }, [form.items]);
 
   /* =====================================================
      Totals
   ===================================================== */
 
   const subtotal = useMemo(() => {
-    return form.items.reduce(
-      (sum, item) => {
-        const qty =
-          Number(item?.qty) || 0;
-
-        const unitPrice =
-          Number(item?.unitPrice) || 0;
-
-        const tax =
-          Number(item?.tax) || 0;
-
-        return (
-          sum +
-          qty *
-            unitPrice *
-            (1 + tax / 100)
-        );
-      },
+    return calculatedItems.reduce(
+      (sum, item) => sum + item.total,
       0
     );
-  }, [form.items]);
+  }, [calculatedItems]);
 
   const gst = useMemo(() => {
     return subtotal * 0.1;
@@ -405,73 +563,27 @@ export default function InvoiceDetailPage() {
   }, [subtotal, gst]);
 
   /* =====================================================
-     PDF Items
-  ===================================================== */
-
-  const pdfItems = useMemo(() => {
-    return form.items.map((item) => {
-      const qty =
-        Number(item?.qty) || 0;
-
-      const unitPrice =
-        Number(item?.unitPrice) || 0;
-
-      const tax =
-        Number(item?.tax) || 0;
-
-      return {
-        description:
-          item?.description || "",
-
-        qty,
-
-        unitPrice,
-
-        tax,
-
-        total:
-          qty *
-          unitPrice *
-          (1 + tax / 100),
-      };
-    });
-  }, [form.items]);
-
-  /* =====================================================
      PDF Data
   ===================================================== */
 
   const invoiceDataForPDF = useMemo(() => {
     return {
-      invoiceNumber:
-        form.invoiceNumber || "",
+      invoiceNumber: form.invoiceNumber || "",
+      invoiceDate: form.invoiceDate || "",
+      dueDate: form.dueDate || "",
+      status: form.status || "Draft",
 
-      invoiceDate:
-        form.invoiceDate || "",
+      projectName: form.projectName || "",
+      poNumber: form.poNumber || "",
+      notes: form.notes || "",
 
-      dueDate:
-        form.dueDate || "",
+      accountManager: form.accountManager || "",
+      accountManagerEmail: form.accountManagerEmail || "",
 
-      status:
-        form.status || "Draft",
+      client: normalizeClient(form.client),
 
-      projectName:
-        form.projectName || "",
-
-      poNumber:
-        form.poNumber || "",
-
-      notes:
-        form.notes || "",
-
-      accountManager:
-        form.accountManager || "",
-
-      accountManagerEmail:
-        form.accountManagerEmail || "",
-
-      client:
-        form.client || {},
+      clientId:
+        form.clientId || form.client?.id || "",
 
       clientName:
         form.client?.name || "",
@@ -479,13 +591,10 @@ export default function InvoiceDetailPage() {
       clientAddress:
         form.client?.address || "",
 
-      items:
-        pdfItems,
+      items: calculatedItems,
 
       subtotal,
-
       gst,
-
       total,
     };
   }, [
@@ -499,7 +608,8 @@ export default function InvoiceDetailPage() {
     form.accountManager,
     form.accountManagerEmail,
     form.client,
-    pdfItems,
+    form.clientId,
+    calculatedItems,
     subtotal,
     gst,
     total,
@@ -516,109 +626,101 @@ export default function InvoiceDetailPage() {
       setError("");
 
       if (!params?.id) {
-        throw new Error(
-          "Invoice ID is missing."
-        );
+        throw new Error("Invoice ID is missing.");
       }
 
       if (!form.projectId) {
-        throw new Error(
-          "Please select a project."
-        );
+        throw new Error("Please select a project.");
       }
 
-      const invoiceRef = doc(
-        db,
-        "invoices",
-        params.id
+      /* -----------------------------------------------
+         Validate Client
+      ----------------------------------------------- */
+
+      if (!form.client.id) {
+        throw new Error("Please select a Client.");
+      }
+
+      const currentClient = clients.find(
+        (item) => item.id === form.client.id
       );
+
+      if (!currentClient) {
+        throw new Error("Selected Client not found.");
+      }
+
+      /* -----------------------------------------------
+         Validate Contact
+
+         Verify that selected Contact belongs to
+         the currently selected Client.
+      ----------------------------------------------- */
+
+      const selectedContact = form.client.selectedContact;
+
+      const validContact = currentClient.contacts.find(
+        (contact) =>
+          contact.contactName === selectedContact.contactName &&
+          contact.email === selectedContact.email &&
+          contact.phone === selectedContact.phone
+      );
+
+      if (!selectedContact.contactName || !validContact) {
+        throw new Error(
+          "Please select a valid Contact for this Client."
+        );
+      }
 
       /* -----------------------------------------------
          Clean Items
       ----------------------------------------------- */
 
-      const cleanItems =
-        form.items.map((item) => {
-          const qty =
-            Number(item?.qty) || 0;
-
-          const unitPrice =
-            Number(item?.unitPrice) || 0;
-
-          const tax =
-            Number(item?.tax) || 0;
-
-          return {
-            description:
-              item?.description || "",
-
-            qty,
-
-            unitPrice,
-
-            tax,
-
-            total:
-              qty *
-              unitPrice *
-              (1 + tax / 100),
-          };
-        });
+      const cleanItems = calculatedItems.map((item) => ({
+        description: item.description || "",
+        qty: Number(item.qty) || 0,
+        unitPrice: Number(item.unitPrice) || 0,
+        tax: Number(item.tax) || 0,
+        total: Number(item.total) || 0,
+      }));
 
       /* -----------------------------------------------
          Totals
       ----------------------------------------------- */
 
-      const cleanSubtotal =
-        cleanItems.reduce(
-          (sum, item) =>
-            sum + item.total,
-          0
-        );
+      const cleanSubtotal = cleanItems.reduce(
+        (sum, item) => sum + item.total,
+        0
+      );
 
-      const cleanGst =
-        cleanSubtotal * 0.1;
-
-      const cleanTotal =
-        cleanSubtotal + cleanGst;
+      const cleanGst = cleanSubtotal * 0.1;
+      const cleanTotal = cleanSubtotal + cleanGst;
 
       /* -----------------------------------------------
-         Client
+         Client Snapshot
+
+         Only save the new Client structure.
       ----------------------------------------------- */
 
       const cleanClient = {
-        id:
-          form.client?.id || "",
+        id: currentClient.id,
+        name: currentClient.name || "",
+        abn: currentClient.abn || "",
+        address: currentClient.address || "",
 
-        name:
-          form.client?.name || "",
-
-        abn:
-          form.client?.abn || "",
-
-        contact:
-          form.client?.contact || "",
-
-        email:
-          form.client?.email || "",
-
-        phone:
-          form.client?.phone || "",
-
-        address:
-          form.client?.address || "",
+        selectedContact: {
+          contactName: validContact.contactName || "",
+          email: validContact.email || "",
+          phone: validContact.phone || "",
+        },
       };
 
       /* -----------------------------------------------
          Project
       ----------------------------------------------- */
 
-      const selectedProject =
-        projects.find(
-          (project) =>
-            project.id ===
-            form.projectId
-        );
+      const selectedProject = projects.find(
+        (project) => project.id === form.projectId
+      );
 
       const projectName =
         selectedProject?.projectName ||
@@ -650,18 +752,21 @@ export default function InvoiceDetailPage() {
           form.dueDate || "",
 
         clientId:
-          form.clientId ||
-          form.client?.id ||
-          "",
+          cleanClient.id,
 
-        client:
-          cleanClient,
+        clientName:
+          cleanClient.name,
+
+        clientAddress:
+          cleanClient.address,
+
+        // New Client Structure Only
+        client: cleanClient,
 
         poNumber:
           form.poNumber || "",
 
-        items:
-          cleanItems,
+        items: cleanItems,
 
         notes:
           form.notes || "",
@@ -672,27 +777,24 @@ export default function InvoiceDetailPage() {
         accountManagerEmail:
           form.accountManagerEmail || "",
 
-        subtotal:
-          cleanSubtotal,
+        subtotal: cleanSubtotal,
+        gst: cleanGst,
+        total: cleanTotal,
 
-        gst:
-          cleanGst,
-
-        total:
-          cleanTotal,
-
-        updatedAt:
-          serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
 
       /* -----------------------------------------------
          Firebase
       ----------------------------------------------- */
 
-      await updateDoc(
-        invoiceRef,
-        updatedData
+      const invoiceRef = doc(
+        db,
+        "invoices",
+        params.id
       );
+
+      await updateDoc(invoiceRef, updatedData);
 
       /* -----------------------------------------------
          Update Local Invoice
@@ -702,20 +804,12 @@ export default function InvoiceDetailPage() {
         ...prev,
         ...updatedData,
 
-        items:
-          cleanItems,
+        client: cleanClient,
+        items: cleanItems,
 
-        client:
-          cleanClient,
-
-        subtotal:
-          cleanSubtotal,
-
-        gst:
-          cleanGst,
-
-        total:
-          cleanTotal,
+        subtotal: cleanSubtotal,
+        gst: cleanGst,
+        total: cleanTotal,
       }));
 
       /* -----------------------------------------------
@@ -725,17 +819,13 @@ export default function InvoiceDetailPage() {
       setForm((prev) => ({
         ...prev,
 
-        projectId:
-          form.projectId,
+        projectId: form.projectId,
+        projectName,
 
-        projectName:
-          projectName,
+        items: cleanItems,
 
-        items:
-          cleanItems,
-
-        client:
-          cleanClient,
+        client: cleanClient,
+        clientId: cleanClient.id,
       }));
 
       setEditing(false);
@@ -744,15 +834,12 @@ export default function InvoiceDetailPage() {
       setTimeout(() => {
         setSaved(false);
       }, 2500);
+
     } catch (err) {
-      console.error(
-        "Failed to save invoice:",
-        err
-      );
+      console.error("Failed to save invoice:", err);
 
       setError(
-        err.message ||
-          "Failed to save invoice."
+        err.message || "Failed to save invoice."
       );
     } finally {
       setSaving(false);
@@ -768,31 +855,28 @@ export default function InvoiceDetailPage() {
 
     const data = invoice;
 
-    const client =
-      typeof data.client === "object" &&
-      data.client !== null
-        ? data.client
+    const originalClientId =
+      data.client?.id ||
+      data.clientId ||
+      "";
+
+    const clientRecord = clients.find(
+      (item) => item.id === originalClientId
+    );
+
+    const client = normalizeClient(
+      clientRecord
+        ? {
+            ...clientRecord,
+            selectedContact: data.client?.selectedContact,
+          }
         : {
-            name:
-              data.client || "",
-          };
+            ...data.client,
+            id: originalClientId,
+          }
+    );
 
-    const items =
-      Array.isArray(data.items)
-        ? data.items.map((item) => ({
-            description:
-              item?.description || "",
-
-            qty:
-              Number(item?.qty) || 0,
-
-            unitPrice:
-              Number(item?.unitPrice) || 0,
-
-            tax:
-              Number(item?.tax) || 0,
-          }))
-        : [];
+    const items = normalizeItems(data.items);
 
     setForm({
       invoiceNumber:
@@ -815,33 +899,9 @@ export default function InvoiceDetailPage() {
       dueDate:
         data.dueDate || "",
 
-      client: {
-        id:
-          client?.id || "",
+      client,
 
-        name:
-          client?.name || "",
-
-        abn:
-          client?.abn || "",
-
-        contact:
-          client?.contact || "",
-
-        email:
-          client?.email || "",
-
-        phone:
-          client?.phone || "",
-
-        address:
-          client?.address || "",
-      },
-
-      clientId:
-        data.clientId ||
-        client?.id ||
-        "",
+      clientId: originalClientId,
 
       poNumber:
         data.poNumber || "",
@@ -852,14 +912,10 @@ export default function InvoiceDetailPage() {
         data.notes || "",
 
       accountManager:
-        data.accountManager ||
-        data.projectManager ||
-        "",
+        data.accountManager || "",
 
       accountManagerEmail:
-        data.accountManagerEmail ||
-        data.projectManagerEmail ||
-        "",
+        data.accountManagerEmail || "",
     });
 
     setEditing(false);
@@ -870,7 +926,7 @@ export default function InvoiceDetailPage() {
      Loading
   ===================================================== */
 
-  if (loading) {
+  if (loading || loadingClients) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="mx-auto max-w-6xl">
@@ -927,9 +983,7 @@ export default function InvoiceDetailPage() {
 
       <div className="mx-auto max-w-6xl">
 
-        {/* =================================================
-            Header
-        ================================================= */}
+        {/* Header */}
 
         <div className="mb-8 flex items-start justify-between">
 
@@ -943,8 +997,7 @@ export default function InvoiceDetailPage() {
             </Link>
 
             <h1 className="mt-3 text-3xl font-bold">
-              {form.invoiceNumber ||
-                "Invoice"}
+              {form.invoiceNumber || "Invoice"}
             </h1>
 
             <p className="mt-1 text-sm text-gray-500">
@@ -958,10 +1011,8 @@ export default function InvoiceDetailPage() {
             {!editing && (
               <button
                 type="button"
-                onClick={() =>
-                  setEditing(true)
-                }
-                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+                onClick={() => setEditing(true)}
+                className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
               >
                 Edit
               </button>
@@ -981,15 +1032,10 @@ export default function InvoiceDetailPage() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={
-                    saving ||
-                    loadingProjects
-                  }
-                  className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+                  disabled={saving || loadingProjects}
+                  className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:opacity-50"
                 >
-                  {saving
-                    ? "Saving..."
-                    : "Save Changes"}
+                  {saving ? "Saving..." : "Save Changes"}
                 </button>
               </>
             )}
@@ -997,9 +1043,7 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
 
-        {/* =================================================
-            Saved Message
-        ================================================= */}
+        {/* Saved Message */}
 
         {saved && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
@@ -1007,9 +1051,7 @@ export default function InvoiceDetailPage() {
           </div>
         )}
 
-        {/* =================================================
-            Error
-        ================================================= */}
+        {/* Error */}
 
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -1037,8 +1079,6 @@ export default function InvoiceDetailPage() {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            {/* Project */}
-
             <div>
 
               <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -1050,62 +1090,42 @@ export default function InvoiceDetailPage() {
                   <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
                     Loading projects...
                   </p>
-                ) : projects.length === 0 ? (
-                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-                    No projects found.
-                  </div>
                 ) : (
                   <select
-                    value={
-                      form.projectId
-                    }
+                    value={form.projectId}
                     onChange={(e) =>
-                      handleProjectChange(
-                        e.target.value
-                      )
+                      handleProjectChange(e.target.value)
                     }
                     className="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-black focus:ring-1 focus:ring-black"
                   >
-
                     <option value="">
                       Select project
                     </option>
 
-                    {projects.map(
-                      (project) => {
-                        const projectName =
-                          project.projectName ||
-                          project.name ||
-                          "";
+                    {projects.map((project) => {
+                      const projectName =
+                        project.projectName ||
+                        project.name ||
+                        "";
 
-                        return (
-                          <option
-                            key={
-                              project.id
-                            }
-                            value={
-                              project.id
-                            }
-                          >
-                            {projectName ||
-                              "Unnamed Project"}
-                          </option>
-                        );
-                      }
-                    )}
-
+                      return (
+                        <option
+                          key={project.id}
+                          value={project.id}
+                        >
+                          {projectName || "Unnamed Project"}
+                        </option>
+                      );
+                    })}
                   </select>
                 )
               ) : (
                 <p className="rounded-lg bg-gray-50 px-4 py-3">
-                  {form.projectName ||
-                    "-"}
+                  {form.projectName || "-"}
                 </p>
               )}
 
             </div>
-
-            {/* Status */}
 
             <div>
 
@@ -1115,38 +1135,17 @@ export default function InvoiceDetailPage() {
 
               {editing ? (
                 <select
-                  value={
-                    form.status
-                  }
+                  value={form.status}
                   onChange={(e) =>
-                    updateForm(
-                      "status",
-                      e.target.value
-                    )
+                    updateForm("status", e.target.value)
                   }
                   className="w-full rounded-lg border border-gray-300 px-4 py-3"
                 >
-
-                  <option value="Draft">
-                    Draft
-                  </option>
-
-                  <option value="Issued">
-                    Issued
-                  </option>
-
-                  <option value="Paid">
-                    Paid
-                  </option>
-
-                  <option value="Overdue">
-                    Overdue
-                  </option>
-
-                  <option value="Cancelled">
-                    Cancelled
-                  </option>
-
+                  <option value="Draft">Draft</option>
+                  <option value="Issued">Issued</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Overdue">Overdue</option>
+                  <option value="Cancelled">Cancelled</option>
                 </select>
               ) : (
                 <p className="rounded-lg bg-gray-50 px-4 py-3">
@@ -1174,59 +1173,39 @@ export default function InvoiceDetailPage() {
 
             <Field
               label="Invoice Number"
-              value={
-                form.invoiceNumber
-              }
+              value={form.invoiceNumber}
               editing={editing}
               onChange={(value) =>
-                updateForm(
-                  "invoiceNumber",
-                  value
-                )
+                updateForm("invoiceNumber", value)
               }
             />
 
             <Field
               label="Invoice Date"
               type="date"
-              value={
-                form.invoiceDate
-              }
+              value={form.invoiceDate}
               editing={editing}
               onChange={(value) =>
-                updateForm(
-                  "invoiceDate",
-                  value
-                )
+                updateForm("invoiceDate", value)
               }
             />
 
             <Field
               label="Due Date"
               type="date"
-              value={
-                form.dueDate
-              }
+              value={form.dueDate}
               editing={editing}
               onChange={(value) =>
-                updateForm(
-                  "dueDate",
-                  value
-                )
+                updateForm("dueDate", value)
               }
             />
 
             <Field
               label="PO Number"
-              value={
-                form.poNumber
-              }
+              value={form.poNumber}
               editing={editing}
               onChange={(value) =>
-                updateForm(
-                  "poNumber",
-                  value
-                )
+                updateForm("poNumber", value)
               }
             />
 
@@ -1249,7 +1228,7 @@ export default function InvoiceDetailPage() {
               </h2>
 
               <p className="mt-1 text-sm text-gray-500">
-                Client information
+                Client and contact information
               </p>
 
             </div>
@@ -1267,92 +1246,130 @@ export default function InvoiceDetailPage() {
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            <Field
-              label="Client Name"
-              value={
-                form.client.name
-              }
-              editing={editing}
-              onChange={(value) =>
-                updateClient(
-                  "name",
-                  value
-                )
-              }
-            />
+            {/* Client Name */}
+
+            <div>
+
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Client Name
+              </label>
+
+              {editing ? (
+                <select
+                  value={form.client.id}
+                  onChange={(e) =>
+                    handleClientChange(e.target.value)
+                  }
+                  className="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-black focus:ring-1 focus:ring-black"
+                >
+
+                  <option value="">
+                    Select Client
+                  </option>
+
+                  {clients.map((client) => (
+                    <option
+                      key={client.id}
+                      value={client.id}
+                    >
+                      {client.name || "Unnamed Client"}
+                    </option>
+                  ))}
+
+                </select>
+              ) : (
+                <p className="rounded-lg bg-gray-50 px-4 py-3">
+                  {form.client.name || "-"}
+                </p>
+              )}
+
+            </div>
+
+            {/* ABN */}
 
             <Field
               label="ABN"
-              value={
-                form.client.abn
-              }
-              editing={editing}
-              onChange={(value) =>
-                updateClient(
-                  "abn",
-                  value
-                )
-              }
+              value={form.client.abn}
+              editing={false}
             />
 
-            <Field
-              label="Contact"
-              value={
-                form.client.contact
-              }
-              editing={editing}
-              onChange={(value) =>
-                updateClient(
-                  "contact",
-                  value
-                )
-              }
-            />
+            {/* Contact Name */}
+
+            <div>
+
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Contact Name
+              </label>
+
+              {editing ? (
+                <select
+                  value={selectedContactIndex}
+                  onChange={(e) =>
+                    handleContactChange(e.target.value)
+                  }
+                  disabled={!form.client.id || clientContacts.length === 0}
+                  className="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-black focus:ring-1 focus:ring-black disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                >
+
+                  <option value="">
+                    {!form.client.id
+                      ? "Select Client First"
+                      : clientContacts.length === 0
+                      ? "No Contacts Available"
+                      : "Select Contact"}
+                  </option>
+
+                  {clientContacts.map((contact, index) => (
+                    <option
+                      key={`${index}-${contact.email || contact.contactName}`}
+                      value={String(index)}
+                    >
+                      {contact.contactName || "Unnamed Contact"}
+                    </option>
+                  ))}
+
+                </select>
+              ) : (
+                <p className="rounded-lg bg-gray-50 px-4 py-3">
+                  {form.client.selectedContact.contactName || "-"}
+                </p>
+              )}
+
+            </div>
+
+            {/* Email */}
 
             <Field
               label="Email"
               type="email"
-              value={
-                form.client.email
-              }
-              editing={editing}
-              onChange={(value) =>
-                updateClient(
-                  "email",
-                  value
-                )
-              }
+              value={form.client.selectedContact.email}
+              editing={false}
             />
+
+            {/* Phone */}
 
             <Field
               label="Phone"
-              value={
-                form.client.phone
-              }
-              editing={editing}
-              onChange={(value) =>
-                updateClient(
-                  "phone",
-                  value
-                )
-              }
+              value={form.client.selectedContact.phone}
+              editing={false}
             />
+
+            {/* Address */}
 
             <Field
               label="Address"
-              value={
-                form.client.address
-              }
-              editing={editing}
-              onChange={(value) =>
-                updateClient(
-                  "address",
-                  value
-                )
-              }
+              value={form.client.address}
+              editing={false}
             />
 
           </div>
+
+          {editing && form.client.id && clientContacts.length === 0 && (
+            <p className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+              This Client has no contacts. Please add a Contact
+              in the Clients page before saving this Invoice.
+            </p>
+          )}
 
         </section>
 
@@ -1398,7 +1415,6 @@ export default function InvoiceDetailPage() {
               <table className="w-full text-sm">
 
                 <thead>
-
                   <tr className="border-b text-left">
 
                     <th className="pb-3 pr-4">
@@ -1428,165 +1444,127 @@ export default function InvoiceDetailPage() {
                     )}
 
                   </tr>
-
                 </thead>
 
                 <tbody>
 
-                  {form.items.map(
-                    (item, index) => {
+                  {calculatedItems.map((item, index) => (
+                    <tr
+                      key={index}
+                      className="border-b last:border-0"
+                    >
 
-                      const qty =
-                        Number(item?.qty) ||
-                        0;
+                      <td className="py-4 pr-4">
 
-                      const unitPrice =
-                        Number(
-                          item?.unitPrice
-                        ) || 0;
+                        {editing ? (
+                          <input
+                            type="text"
+                            value={item.description}
+                            onChange={(e) =>
+                              updateItem(
+                                index,
+                                "description",
+                                e.target.value
+                              )
+                            }
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                            placeholder="Description"
+                          />
+                        ) : (
+                          item.description || "-"
+                        )}
 
-                      const itemTotal =
-                        qty *
-                        unitPrice;
+                      </td>
 
-                      return (
-                        <tr
-                          key={index}
-                          className="border-b last:border-0"
-                        >
+                      <td className="py-4 pr-4">
 
-                          <td className="py-4 pr-4">
+                        {editing ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={item.qty}
+                            onChange={(e) =>
+                              updateItem(
+                                index,
+                                "qty",
+                                e.target.value
+                              )
+                            }
+                            className="w-24 rounded-lg border border-gray-300 px-3 py-2"
+                          />
+                        ) : (
+                          item.qty
+                        )}
 
-                            {editing ? (
-                              <input
-                                type="text"
-                                value={
-                                  item.description ||
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  updateItem(
-                                    index,
-                                    "description",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                                placeholder="Description"
-                              />
-                            ) : (
-                              item.description ||
-                              "-"
-                            )}
+                      </td>
 
-                          </td>
+                      <td className="py-4 pr-4">
 
-                          <td className="py-4 pr-4">
+                        {editing ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              updateItem(
+                                index,
+                                "unitPrice",
+                                e.target.value
+                              )
+                            }
+                            className="w-32 rounded-lg border border-gray-300 px-3 py-2"
+                          />
+                        ) : (
+                          `$${item.unitPrice.toFixed(2)}`
+                        )}
 
-                            {editing ? (
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={
-                                  item.qty
-                                }
-                                onChange={(e) =>
-                                  updateItem(
-                                    index,
-                                    "qty",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-24 rounded-lg border border-gray-300 px-3 py-2"
-                              />
-                            ) : (
-                              qty
-                            )}
+                      </td>
 
-                          </td>
+                      <td className="py-4 pr-4">
 
-                          <td className="py-4 pr-4">
+                        {editing ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={item.tax}
+                            onChange={(e) =>
+                              updateItem(
+                                index,
+                                "tax",
+                                e.target.value
+                              )
+                            }
+                            className="w-24 rounded-lg border border-gray-300 px-3 py-2"
+                          />
+                        ) : (
+                          `${item.tax}%`
+                        )}
 
-                            {editing ? (
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={
-                                  item.unitPrice
-                                }
-                                onChange={(e) =>
-                                  updateItem(
-                                    index,
-                                    "unitPrice",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-32 rounded-lg border border-gray-300 px-3 py-2"
-                              />
-                            ) : (
-                              `$${unitPrice.toFixed(
-                                2
-                              )}`
-                            )}
+                      </td>
 
-                          </td>
+                      <td className="py-4 text-right font-medium">
+                        ${item.total.toFixed(2)}
+                      </td>
 
-                          <td className="py-4 pr-4">
+                      {editing && (
+                        <td className="py-4 pl-4">
 
-                            {editing ? (
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.1"
-                                value={
-                                  item.tax
-                                }
-                                onChange={(e) =>
-                                  updateItem(
-                                    index,
-                                    "tax",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-24 rounded-lg border border-gray-300 px-3 py-2"
-                              />
-                            ) : (
-                              `${item.tax || 0}%`
-                            )}
+                          <button
+                            type="button"
+                            onClick={() => removeItem(index)}
+                            className="text-sm text-red-600 hover:underline"
+                          >
+                            Remove
+                          </button>
 
-                          </td>
+                        </td>
+                      )}
 
-                          <td className="py-4 text-right font-medium">
-                            $
-                            {itemTotal.toFixed(
-                              2
-                            )}
-                          </td>
-
-                          {editing && (
-                            <td className="py-4 pl-4">
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  removeItem(
-                                    index
-                                  )
-                                }
-                                className="text-sm text-red-600 hover:underline"
-                              >
-                                Remove
-                              </button>
-
-                            </td>
-                          )}
-
-                        </tr>
-                      );
-                    }
-                  )}
+                    </tr>
+                  ))}
 
                 </tbody>
 
@@ -1595,55 +1573,36 @@ export default function InvoiceDetailPage() {
             </div>
           )}
 
-          {/* =================================================
-              Totals
-          ================================================= */}
+          {/* Totals */}
 
           <div className="mt-6 ml-auto max-w-sm border-t pt-5">
 
             <div className="mb-3 flex justify-between">
-
               <span className="text-gray-600">
                 Subtotal
               </span>
 
               <span>
-                $
-                {subtotal.toFixed(
-                  2
-                )}
+                ${subtotal.toFixed(2)}
               </span>
-
             </div>
 
             <div className="mb-3 flex justify-between">
-
               <span className="text-gray-600">
                 GST (10%)
               </span>
 
               <span>
-                $
-                {gst.toFixed(
-                  2
-                )}
+                ${gst.toFixed(2)}
               </span>
-
             </div>
 
             <div className="flex justify-between text-lg font-bold">
+              <span>Total</span>
 
               <span>
-                Total
+                ${total.toFixed(2)}
               </span>
-
-              <span>
-                $
-                {total.toFixed(
-                  2
-                )}
-              </span>
-
             </div>
 
           </div>
@@ -1664,10 +1623,7 @@ export default function InvoiceDetailPage() {
             <textarea
               value={form.notes}
               onChange={(e) =>
-                updateForm(
-                  "notes",
-                  e.target.value
-                )
+                updateForm("notes", e.target.value)
               }
               rows={6}
               className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3"
@@ -1705,30 +1661,20 @@ export default function InvoiceDetailPage() {
 
             <Field
               label="Contact Name"
-              value={
-                form.accountManager
-              }
+              value={form.accountManager}
               editing={editing}
               onChange={(value) =>
-                updateForm(
-                  "accountManager",
-                  value
-                )
+                updateForm("accountManager", value)
               }
             />
 
             <Field
               label="Contact Email"
               type="email"
-              value={
-                form.accountManagerEmail
-              }
+              value={form.accountManagerEmail}
               editing={editing}
               onChange={(value) =>
-                updateForm(
-                  "accountManagerEmail",
-                  value
-                )
+                updateForm("accountManagerEmail", value)
               }
             />
 
@@ -1750,17 +1696,12 @@ export default function InvoiceDetailPage() {
 
             <PDFDownloadLink
               document={
-                <InvoicePDF
-                  invoice={
-                    invoiceDataForPDF
-                  }
-                />
+                <InvoicePDF invoice={invoiceDataForPDF} />
               }
               fileName={`${
-                form.invoiceNumber ||
-                "invoice"
+                form.invoiceNumber || "invoice"
               }.pdf`}
-              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+              className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
             >
               {({ loading }) =>
                 loading
@@ -1774,18 +1715,12 @@ export default function InvoiceDetailPage() {
           <div className="h-[900px] overflow-hidden rounded-lg border">
 
             <PDFViewer
-              key={JSON.stringify(
-                invoiceDataForPDF
-              )}
+              key={JSON.stringify(invoiceDataForPDF)}
               width="100%"
               height="100%"
               showToolbar
             >
-              <InvoicePDF
-                invoice={
-                  invoiceDataForPDF
-                }
-              />
+              <InvoicePDF invoice={invoiceDataForPDF} />
             </PDFViewer>
 
           </div>
@@ -1820,11 +1755,7 @@ function Field({
         <input
           type={type}
           value={value || ""}
-          onChange={(e) =>
-            onChange(
-              e.target.value
-            )
-          }
+          onChange={(e) => onChange(e.target.value)}
           className="w-full rounded-lg border border-gray-300 px-4 py-3"
         />
       ) : (
@@ -1836,4 +1767,3 @@ function Field({
     </div>
   );
 }
-

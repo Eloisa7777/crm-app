@@ -23,25 +23,20 @@ export default function NewquotePage() {
   const [clients, setClients] = useState([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState("");
-
+  const [selectedContactIndex, setSelectedContactIndex] = useState("");
   /* =====================================================
      Form
   ===================================================== */
 
   const [form, setForm] = useState({
-    quoteNumber: "",
-    projectNo: "",
     projectName: "",
     status: "quoting",
 
     dueDate: new Date().toISOString().split("T")[0],
-
+    estStartDate: new Date().toISOString().split("T")[0],
     siteAddress: "",
-
+    projectType: "",
     note: "",
-
-    /* Quote Info */
-
     estimator: "",
 
     /* Project SQM Rate */
@@ -88,7 +83,6 @@ export default function NewquotePage() {
   /* =====================================================
      Load Clients
   ===================================================== */
-
   useEffect(() => {
     const loadClients = async () => {
       try {
@@ -102,12 +96,14 @@ export default function NewquotePage() {
         const data = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
+          contacts: Array.isArray(doc.data().contacts)
+            ? doc.data().contacts
+            : [],
         }));
 
         setClients(data);
-
-        // Do not automatically select the first client.
         setSelectedClientId("");
+        setSelectedContactIndex("");
       } catch (err) {
         console.error("Error loading clients:", err);
         setError("Failed to load clients.");
@@ -118,7 +114,6 @@ export default function NewquotePage() {
 
     loadClients();
   }, []);
-
   /* =====================================================
      Selected Client
   ===================================================== */
@@ -126,8 +121,28 @@ export default function NewquotePage() {
   const selectedClient = useMemo(() => {
     return clients.find(
       (client) => client.id === selectedClientId
-    );
+    ) || null;
   }, [clients, selectedClientId]);
+
+  /* =====================================================
+     Client Contacts
+  ===================================================== */
+
+  const clientContacts = useMemo(() => {
+    return Array.isArray(selectedClient?.contacts)
+      ? selectedClient.contacts
+      : [];
+  }, [selectedClient]);
+
+  /* =====================================================
+     Selected Contact
+  ===================================================== */
+
+  const selectedContact = useMemo(() => {
+    if (selectedContactIndex === "") return null;
+
+    return clientContacts[Number(selectedContactIndex)] || null;
+  }, [clientContacts, selectedContactIndex]);
 
   /* =====================================================
      Client Change
@@ -135,8 +150,18 @@ export default function NewquotePage() {
 
   const handleClientChange = (e) => {
     setSelectedClientId(e.target.value);
+
+    // Clear previous Contact
+    setSelectedContactIndex("");
   };
 
+  /* =====================================================
+     Contact Change
+  ===================================================== */
+
+  const handleContactChange = (e) => {
+    setSelectedContactIndex(e.target.value);
+  };
   /* =====================================================
      Form Change
   ===================================================== */
@@ -230,6 +255,15 @@ export default function NewquotePage() {
         return;
       }
 
+            // Client is optional.
+      // However, if Client is selected,
+      // Contact must also be selected.
+
+      if (selectedClient && !selectedContact) {
+        setError("Please select a Contact for this Client.");
+        return;
+      }
+
       setSaving(true);
 
       /* ---------------------------------------------
@@ -245,17 +279,14 @@ export default function NewquotePage() {
         /* ---------------------------------------------
            Quote / Project Information
         --------------------------------------------- */
-
-        quoteNumber: form.quoteNumber,
-        projectNo: form.projectNo,
         projectName: form.projectName,
-
         dueDate: form.dueDate,
+        estStartDate: form.estStartDate,
 
         status: form.status,
 
         siteAddress: form.siteAddress,
-
+        projectType: form.projectType,
         note: form.note,
 
         /* ---------------------------------------------
@@ -307,6 +338,14 @@ export default function NewquotePage() {
            client = null
         --------------------------------------------- */
 
+        /* ---------------------------------------------
+           Client Relationship
+
+           Client is optional.
+
+           If Client is selected, Contact is required.
+        --------------------------------------------- */
+
         clientId: selectedClient
           ? selectedClient.id
           : "",
@@ -314,12 +353,23 @@ export default function NewquotePage() {
         client: selectedClient
           ? {
               id: selectedClient.id,
+
               name: selectedClient.name || "",
+
               abn: selectedClient.abn || "",
-              contact: selectedClient.contact || "",
-              email: selectedClient.email || "",
-              phone: selectedClient.phone || "",
+
               address: selectedClient.address || "",
+
+              selectedContact: {
+                contactName:
+                  selectedContact.contactName || "",
+
+                email:
+                  selectedContact.email || "",
+
+                phone:
+                  selectedContact.phone || "",
+              },
             }
           : null,
 
@@ -521,107 +571,171 @@ export default function NewquotePage() {
             <p className="text-gray-500">
               Loading clients...
             </p>
-          ) : clients.length === 0 ? (
-            <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800">
-              No clients found. Client can be left blank.
-            </div>
           ) : (
             <div>
 
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Select Client
-              </label>
+              {/* Client Selection */}
 
-              <select
-                value={selectedClientId}
-                onChange={handleClientChange}
-                className="w-full rounded-lg border px-4 py-3"
-              >
-                <option value="">
-                  Select client (optional)
-                </option>
+              <div>
 
-                {clients.map((client) => (
-                  <option
-                    key={client.id}
-                    value={client.id}
-                  >
-                    {client.name}
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Select Client
+                </label>
+
+                <select
+                  value={selectedClientId}
+                  onChange={handleClientChange}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3"
+                >
+
+                  <option value="">
+                    Select client (optional)
                   </option>
-                ))}
-              </select>
 
-            </div>
-          )}
+                  {clients.map((client) => (
+                    <option
+                      key={client.id}
+                      value={client.id}
+                    >
+                      {client.name || "Unnamed Client"}
+                    </option>
+                  ))}
 
-          {/* Client Details */}
-
-          {selectedClient && (
-            <div className="mt-5 rounded-lg bg-gray-50 p-5">
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-
-                <div>
-                  <p className="text-xs text-gray-500">
-                    Client
-                  </p>
-
-                  <p className="font-medium">
-                    {selectedClient.name || "-"}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">
-                    ABN
-                  </p>
-
-                  <p>
-                    {selectedClient.abn || "-"}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">
-                    Contact
-                  </p>
-
-                  <p>
-                    {selectedClient.contact || "-"}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">
-                    Email
-                  </p>
-
-                  <p>
-                    {selectedClient.email || "-"}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">
-                    Phone
-                  </p>
-
-                  <p>
-                    {selectedClient.phone || "-"}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500">
-                    Address
-                  </p>
-
-                  <p>
-                    {selectedClient.address || "-"}
-                  </p>
-                </div>
+                </select>
 
               </div>
+
+              {/* Selected Client Information */}
+
+              {selectedClient && (
+                <div className="mt-5 rounded-lg bg-gray-50 p-5">
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+
+                    {/* Client Name */}
+
+                    <div>
+                      <p className="text-xs text-gray-500">
+                        Client
+                      </p>
+
+                      <p className="font-medium">
+                        {selectedClient.name || "-"}
+                      </p>
+                    </div>
+
+                    {/* ABN */}
+
+                    <div>
+                      <p className="text-xs text-gray-500">
+                        ABN
+                      </p>
+
+                      <p>
+                        {selectedClient.abn || "-"}
+                      </p>
+                    </div>
+
+                    {/* Address */}
+
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-gray-500">
+                        Address
+                      </p>
+
+                      <p>
+                        {selectedClient.address || "-"}
+                      </p>
+                    </div>
+
+                  </div>
+
+                  {/* Contact Selection */}
+
+                  <div className="mt-5 border-t border-gray-200 pt-5">
+
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Contact
+                      <span className="ml-1 text-red-500">
+                        *
+                      </span>
+                    </label>
+
+                    <select
+                      value={selectedContactIndex}
+                      onChange={handleContactChange}
+                      disabled={clientContacts.length === 0}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 disabled:bg-gray-100"
+                    >
+
+                      <option value="">
+                        {clientContacts.length === 0
+                          ? "No Contacts Available"
+                          : "Select Contact"}
+                      </option>
+
+                      {clientContacts.map((contact, index) => (
+                        <option
+                          key={`${index}-${contact.email || contact.contactName}`}
+                          value={String(index)}
+                        >
+                          {contact.contactName || "Unnamed Contact"}
+                        </option>
+                      ))}
+
+                    </select>
+
+                    {/* Selected Contact Details */}
+
+                    {selectedContact && (
+                      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            Contact Name
+                          </p>
+
+                          <p className="font-medium">
+                            {selectedContact.contactName || "-"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            Email
+                          </p>
+
+                          <p>
+                            {selectedContact.email || "-"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            Phone
+                          </p>
+
+                          <p>
+                            {selectedContact.phone || "-"}
+                          </p>
+                        </div>
+
+                      </div>
+                    )}
+
+                    {/* No Contacts Warning */}
+
+                    {clientContacts.length === 0 && (
+                      <p className="mt-3 text-sm text-red-600">
+                        This Client has no Contacts.
+                        Please add a Contact in the Clients page.
+                      </p>
+                    )}
+
+                  </div>
+
+                </div>
+              )}
 
             </div>
           )}
@@ -683,6 +797,52 @@ export default function NewquotePage() {
                 />
               </div>
 
+                {/* Project Type */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    Project Type
+                  </label>
+
+                  <select
+                    name="projectType"
+                    value={form.projectType}
+                    onChange={handleChange}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-black"
+                  >
+                    <option value="Commercial">
+                      Commercial
+                    </option>
+
+                    <option value="Residential">
+                      Residential
+                    </option>
+
+                    <option value="Renovation">
+                      Renovation
+                    </option>
+
+                    <option value="Fit-out">
+                      Shop Fit-out
+                    </option>
+                  </select>
+                </div>
+
+              {/* EST.Start Date */}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  EST.Start Date
+                </label>
+
+                <input
+                  type="date"
+                  name="estStartDate"
+                  value={form.estStartDate}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                />
+              </div>
+
             </div>
 
           </div>
@@ -703,7 +863,7 @@ export default function NewquotePage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  C&amp;P
+                  C&amp;P only
                 </label>
 
                 <div className="relative">
@@ -724,11 +884,11 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/* Carpentry */}
+              {/* C&P + Carpentry */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Carpentry
+                  C&amp;P + Carpentry
                 </label>
 
                 <div className="relative">
@@ -749,11 +909,11 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/*External work */}
+              {/* C&P + Carpentry + External work */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  External work
+                  C&amp;P + Carpentry + External work
                 </label>
 
                 <div className="relative">
@@ -774,7 +934,7 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/* Prelims */}
+              {/* C&P + Carpentry + Prelims */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -799,11 +959,11 @@ export default function NewquotePage() {
                 </div>
               </div>
 
-              {/* Package Total */}
+              {/* C&P + Carpentry + External + Prelims */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Package Total
+                  C&amp;P + Carpentry + External + Prelims
                 </label>
 
                 <div className="relative">

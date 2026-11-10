@@ -89,12 +89,14 @@ function createFormFromQuote(data) {
     status: data.status || "quoting",
 
     dueDate: normalizeDateInput(data.dueDate),
+    estStartDate: normalizeDateInput(data.estStartDate),
 
     siteAddress: data.siteAddress || "",
 
     note: data.note || "",
 
     estimator: data.estimator || "",
+    projectType: data.projectType || "",
 
     cpOnlyRate: data.cpOnlyRate || "",
     cpCarpentryRate: data.cpCarpentryRate || "",
@@ -231,6 +233,13 @@ function ClientSnapshot({ client }) {
     );
   }
 
+  // 新数据结构优先，兼容旧数据结构
+  const contact = client.selectedContact || {
+    contactName: client.contact || "",
+    email: client.email || "",
+    phone: client.phone || "",
+  };
+
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
       <div className="mb-4">
@@ -251,7 +260,7 @@ function ClientSnapshot({ client }) {
             Contact
           </div>
           <div className="mt-1 text-sm text-gray-800">
-            {client.contact || "-"}
+            {contact.contactName || "-"}
           </div>
         </div>
 
@@ -260,7 +269,7 @@ function ClientSnapshot({ client }) {
             Email
           </div>
           <div className="mt-1 text-sm text-gray-800">
-            {client.email || "-"}
+            {contact.email || "-"}
           </div>
         </div>
 
@@ -269,7 +278,7 @@ function ClientSnapshot({ client }) {
             Phone
           </div>
           <div className="mt-1 text-sm text-gray-800">
-            {client.phone || "-"}
+            {contact.phone || "-"}
           </div>
         </div>
 
@@ -298,7 +307,7 @@ export default function QuoteDetailPage() {
 
   const [quote, setQuote] = useState(null);
   const [clients, setClients] = useState([]);
-
+  const [selectedContactIndex, setSelectedContactIndex] = useState("");
   const [form, setForm] = useState(null);
 
   const [loading, setLoading] = useState(true);
@@ -365,43 +374,98 @@ export default function QuoteDetailPage() {
     }));
   }
 
-  /* =====================================================
-     Client Change
-  ===================================================== */
+/* =====================================================
+   Selected Client Contacts
+===================================================== */
 
-  function handleClientChange(clientId) {
-    if (!clientId) {
-      setForm((prev) => ({
-        ...prev,
-        clientId: "",
-        client: null,
-      }));
+const selectedClient = clients.find(
+  (client) => client.id === form?.clientId
+);
 
-      return;
-    }
+const clientContacts = Array.isArray(selectedClient?.contacts)
+  ? selectedClient.contacts
+  : [];
 
-    const selectedClient = clients.find(
-      (client) => client.id === clientId
-    );
+const selectedContact = form?.client?.selectedContact || null;
 
-    if (!selectedClient) {
-      return;
-    }
+const currentContactIndex = selectedContact
+  ? clientContacts.findIndex(
+      (contact) =>
+        contact.contactName === selectedContact.contactName &&
+        contact.email === selectedContact.email &&
+        contact.phone === selectedContact.phone
+    )
+  : -1;
 
+/* =====================================================
+   Client Change
+===================================================== */
+
+function handleClientChange(clientId) {
+  if (!clientId) {
     setForm((prev) => ({
       ...prev,
-      clientId: selectedClient.id,
-      client: {
-        id: selectedClient.id,
-        name: selectedClient.name || "",
-        abn: selectedClient.abn || "",
-        contact: selectedClient.contact || "",
-        email: selectedClient.email || "",
-        phone: selectedClient.phone || "",
-        address: selectedClient.address || "",
-      },
+      clientId: "",
+      client: null,
     }));
+
+    return;
   }
+
+  const selectedClient = clients.find(
+    (client) => client.id === clientId
+  );
+
+  if (!selectedClient) return;
+
+  // 更换 Client 后清空 Contact，等待重新选择
+  setForm((prev) => ({
+    ...prev,
+    clientId: selectedClient.id,
+    client: {
+      id: selectedClient.id,
+      name: selectedClient.name || "",
+      abn: selectedClient.abn || "",
+      address: selectedClient.address || "",
+      selectedContact: null,
+    },
+  }));
+}
+
+/* =====================================================
+   Contact Change
+===================================================== */
+
+function handleContactChange(contactIndex) {
+  const selectedClient = clients.find(
+    (client) => client.id === form.clientId
+  );
+
+  if (!selectedClient) return;
+
+  const contacts = Array.isArray(selectedClient.contacts)
+    ? selectedClient.contacts
+    : [];
+
+  const selectedContact =
+    contactIndex === ""
+      ? null
+      : contacts[Number(contactIndex)];
+
+  setForm((prev) => ({
+    ...prev,
+    client: {
+      ...prev.client,
+      selectedContact: selectedContact
+        ? {
+            contactName: selectedContact.contactName || "",
+            email: selectedContact.email || "",
+            phone: selectedContact.phone || "",
+          }
+        : null,
+    },
+  }));
+}
 
   /* =====================================================
      Note Line Count
@@ -523,6 +587,11 @@ export default function QuoteDetailPage() {
         alert("Selected client could not be found.");
         return;
       }
+
+      if (!form.client?.selectedContact?.contactName) {
+        alert("Please select a Contact for this Client.");
+        return;
+      }
     }
 
     try {
@@ -537,10 +606,13 @@ export default function QuoteDetailPage() {
             id: selectedClient.id,
             name: selectedClient.name || "",
             abn: selectedClient.abn || "",
-            contact: selectedClient.contact || "",
-            email: selectedClient.email || "",
-            phone: selectedClient.phone || "",
             address: selectedClient.address || "",
+            selectedContact: {
+              contactName:
+                form.client?.selectedContact?.contactName || "",
+              email: form.client?.selectedContact?.email || "",
+              phone: form.client?.selectedContact?.phone || "",
+            },
           }
         : null;
 
@@ -556,13 +628,13 @@ export default function QuoteDetailPage() {
         status: form.status,
 
         dueDate: form.dueDate || "",
-
+        estStartDate: form.estStartDate || "",
         siteAddress: form.siteAddress,
 
         note: form.note,
 
-        estimator: form.estimator,
-
+        estimator: form.estimator || "",
+        projectType: form.projectType || "",
         cpOnlyRate: form.cpOnlyRate,
         cpCarpentryRate: form.cpCarpentryRate,
         cpCarpentryExternalRate:
@@ -806,31 +878,71 @@ export default function QuoteDetailPage() {
 
             <div className="p-6">
               {editing && (
-                <div className="mb-5">
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                    Select Client
-                  </label>
+                <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-2">
+                  {/* Client Dropdown */}
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Select Client
+                    </label>
 
-                  <select
-                    value={form.clientId || ""}
-                    onChange={(e) =>
-                      handleClientChange(e.target.value)
-                    }
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
-                  >
-                    <option value="">
-                      No client selected
-                    </option>
+                    <select
+                      value={form.clientId || ""}
+                      onChange={(e) => {
+                        handleClientChange(e.target.value);
+                        setSelectedContactIndex("");
+                      }}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                    >
+                      <option value="">No client selected</option>
 
-                    {clients.map((client) => (
-                      <option
-                        key={client.id}
-                        value={client.id}
-                      >
-                        {client.name || client.id}
+                      {clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.name || client.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Contact Dropdown */}
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Select Contact
+                    </label>
+
+                    <select
+                      value={
+                        currentContactIndex >= 0
+                          ? String(currentContactIndex)
+                          : ""
+                      }
+                      onChange={(e) => {
+                        handleContactChange(e.target.value);
+                        setSelectedContactIndex(e.target.value);
+                      }}
+                      disabled={!form.clientId || clientContacts.length === 0}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black disabled:bg-gray-100 disabled:text-gray-500"
+                    >
+                      <option value="">
+                        {!form.clientId
+                          ? "Please select a Client first"
+                          : clientContacts.length === 0
+                          ? "No contacts available"
+                          : "Select Contact"}
                       </option>
-                    ))}
-                  </select>
+
+                      {clientContacts.map((contact, index) => (
+                        <option key={index} value={String(index)}>
+                          {contact.contactName || `Contact ${index + 1}`}
+                        </option>
+                      ))}
+                    </select>
+
+                    {form.clientId && clientContacts.length === 0 && (
+                      <p className="mt-1.5 text-xs text-red-500">
+                        No contacts found. Please add a contact in Clients.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -870,12 +982,40 @@ export default function QuoteDetailPage() {
                         }
                       />
 
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                          Project Type
+                        </label>
+
+                        <select
+                          value={form.projectType}
+                          onChange={(e) => updateField("projectType", e.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                        >
+                          <option value="">Select Project Type</option>
+                          <option value="Residential">Residential</option>
+                          <option value="Commercial">Commercial</option>
+                          <option value="Renovation">Renovation</option>
+                          <option value ="Fit-out">Shop Fit-out</option>
+
+                        </select>
+                      </div>
+
                       <Field
                         label="Due Date"
                         type="date"
                         value={form.dueDate}
                         onChange={(value) =>
                           updateField("dueDate", value)
+                        }
+                      />
+
+                      <Field
+                        label="EST.Start Date"
+                        type="date"
+                        value={form.estStartDate}
+                        onChange={(value) =>
+                          updateField("estStartDate", value)
                         }
                       />
                     </>
@@ -887,8 +1027,18 @@ export default function QuoteDetailPage() {
                       />
 
                       <DisplayField
+                        label="Project Type"
+                        value={form.projectType}
+                      />
+
+                      <DisplayField
                         label="Due Date"
                         value={formatDate(form.dueDate)}
+                      />
+
+                      <DisplayField
+                        label="EST.Start Date"
+                        value={formatDate(form.estStartDate)}
                       />
                     </>
                   )}

@@ -344,50 +344,35 @@ const {
 
   /* ===================================================
      Client Data
-
-     New Invoice saves:
-
-     client: {
-       id,
-       name,
-       abn,
-       contact,
-       email,
-       phone,
-       address
-     }
   =================================================== */
 
-  const companyName =
-    client?.name ||
-    invoice?.clientCompany ||
-    clientName ||
-    "";
+const companyName =
+  client?.name ||
+  invoice?.clientCompany ||
+  clientName ||
+  "";
 
-  const clientABN =
-    client?.abn ||
-    invoice?.clientABN ||
-    "";
+const clientABN =
+  client?.abn ||
+  invoice?.clientABN ||
+  "";
 
-  const clientEmail =
-    client?.email ||
-    invoice?.clientEmail ||
-    "";
+const clientEmail =
+  client?.selectedContact?.email ||
+  "";
 
-  const clientContact =
-    client?.contact ||
-    invoice?.clientContact ||
-    "";
+const clientContact =
+  client?.selectedContact?.contactName ||
+  "";
 
-  const clientPhone =
-    client?.phone ||
-    invoice?.clientPhone ||
-    "";
+const clientPhone =
+  client?.selectedContact?.phone ||
+  "";
 
-  const clientAddress =
-    client?.address ||
-    invoice?.clientAddress ||
-    "";
+const clientAddress =
+  client?.address ||
+  invoice?.clientAddress ||
+  "";
 
 
   /* ===================================================

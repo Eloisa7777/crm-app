@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -10,15 +11,17 @@ export default function NewClientPage() {
   const [form, setForm] = useState({
     name: "",
     abn: "",
-    contact: "",
-    email: "",
-    phone: "",
+    contacts: [],
     address: "",
     status: "Active",
   });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // ============================================================
+  // Update Client Information
+  // ============================================================
 
   function updateForm(field, value) {
     setForm((prev) => ({
@@ -27,6 +30,48 @@ export default function NewClientPage() {
     }));
   }
 
+  // ============================================================
+  // Contact Management
+  // ============================================================
+
+  function updateContact(index, field, value) {
+    setForm((prev) => ({
+      ...prev,
+      contacts: prev.contacts.map((item, i) =>
+        i === index
+          ? { ...item, [field]: value }
+          : item
+      ),
+    }));
+  }
+
+  function addContact() {
+    setForm((prev) => ({
+      ...prev,
+      contacts: [
+        ...prev.contacts,
+        {
+          contactName: "",
+          email: "",
+          phone: "",
+        },
+      ],
+    }));
+  }
+
+  function removeContact(index) {
+    setForm((prev) => ({
+      ...prev,
+      contacts: prev.contacts.filter(
+        (_, i) => i !== index
+      ),
+    }));
+  }
+
+  // ============================================================
+  // Save Client
+  // ============================================================
+
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -34,29 +79,41 @@ export default function NewClientPage() {
     setSaving(true);
 
     try {
-      // Create client in Firebase
-      const docRef = await addDoc(collection(db, "Clients"), {
-        name: form.name,
-        abn: form.abn,
-        contact: form.contact,
-        email: form.email,
-        phone: form.phone,
-        address: form.address,
-        status: form.status,
+      const contacts = form.contacts
+        .map((item) => ({
+          contactName: item.contactName.trim(),
+          email: item.email.trim(),
+          phone: item.phone.trim(),
+        }))
+        .filter(
+          (item) =>
+            item.contactName ||
+            item.email ||
+            item.phone
+        );
 
-        // Initial values
-        orders: 0,
-        total: 0,
+      const docRef = await addDoc(
+        collection(db, "Clients"),
+        {
+          name: form.name.trim(),
+          abn: form.abn.trim(),
+          contacts,
+          address: form.address.trim(),
+          status: form.status,
 
-        // Created time
-        createdAt: serverTimestamp(),
-      });
+          // Initial values
+          orders: 0,
+          total: 0,
+
+          // Created time
+          createdAt: serverTimestamp(),
+        }
+      );
 
       console.log("Client created:", docRef.id);
 
       alert("Client saved successfully.");
 
-      // Go back to client list
       window.location.href = "/clients";
     } catch (err) {
       console.error("Error creating client:", err);
@@ -72,7 +129,10 @@ export default function NewClientPage() {
   return (
     <div className="min-h-screen">
 
-      {/* Header */}
+      {/* ========================================================
+          Header
+      ======================================================== */}
+
       <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
 
         <div className="flex items-center gap-4">
@@ -100,13 +160,16 @@ export default function NewClientPage() {
 
       </header>
 
+      {/* ========================================================
+          Form
+      ======================================================== */}
 
-      {/* Form */}
       <form onSubmit={handleSubmit}>
 
         <div className="p-8 max-w-5xl">
 
           {/* Error */}
+
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-600">
@@ -115,8 +178,10 @@ export default function NewClientPage() {
             </div>
           )}
 
+          {/* ====================================================
+              Client Information
+          ==================================================== */}
 
-          {/* Client Information */}
           <section className="bg-white border border-gray-200 rounded-xl mb-6">
 
             <div className="px-6 py-5 border-b border-gray-200">
@@ -154,38 +219,6 @@ export default function NewClientPage() {
                   placeholder="12 345 678 901"
                 />
 
-                <FormField
-                  label="Contact Name"
-                  value={form.contact}
-                  onChange={(value) =>
-                    updateForm("contact", value)
-                  }
-                  placeholder="John Smith"
-                />
-
-                <FormField
-                  label="Phone"
-                  value={form.phone}
-                  onChange={(value) =>
-                    updateForm("phone", value)
-                  }
-                  placeholder="07 3123 4567"
-                />
-
-                <div className="md:col-span-2">
-
-                  <FormField
-                    label="Email"
-                    type="email"
-                    value={form.email}
-                    onChange={(value) =>
-                      updateForm("email", value)
-                    }
-                    placeholder="accounts@supplier.com.au"
-                  />
-
-                </div>
-
                 <div className="md:col-span-2">
 
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -198,7 +231,7 @@ export default function NewClientPage() {
                       updateForm("address", e.target.value)
                     }
                     rows={3}
-                    placeholder="Supplier address"
+                    placeholder="Client address"
                     className="input resize-none"
                   />
 
@@ -234,8 +267,160 @@ export default function NewClientPage() {
 
           </section>
 
+          {/* ====================================================
+              Contacts
+          ==================================================== */}
 
-          {/* Notes */}
+          <section className="bg-white border border-gray-200 rounded-xl mb-6">
+
+            <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
+
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">
+                  Contacts
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1">
+                  Manage client contact details
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={addContact}
+                className="px-4 py-2 text-sm font-medium text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-50"
+              >
+                + Add Contact
+              </button>
+
+            </div>
+
+            <div className="p-6">
+
+              {form.contacts.length > 0 ? (
+
+                <div className="overflow-x-auto">
+
+                  <table className="w-full text-sm">
+
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-gray-500">
+
+                        <th className="px-3 py-3 font-medium">
+                          Contact Name
+                        </th>
+
+                        <th className="px-3 py-3 font-medium">
+                          Email
+                        </th>
+
+                        <th className="px-3 py-3 font-medium">
+                          Phone
+                        </th>
+
+                        <th className="w-12 px-2 py-3"></th>
+
+                      </tr>
+                    </thead>
+
+                    <tbody>
+
+                      {form.contacts.map((item, index) => (
+
+                        <tr
+                          key={index}
+                          className="border-b border-gray-100"
+                        >
+
+                          <td className="p-2 min-w-40">
+                            <input
+                              type="text"
+                              value={item.contactName}
+                              onChange={(e) =>
+                                updateContact(
+                                  index,
+                                  "contactName",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="John Smith"
+                              className="input"
+                            />
+                          </td>
+
+                          <td className="p-2 min-w-48">
+                            <input
+                              type="email"
+                              value={item.email}
+                              onChange={(e) =>
+                                updateContact(
+                                  index,
+                                  "email",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="john@example.com"
+                              className="input"
+                            />
+                          </td>
+
+                          <td className="p-2 min-w-40">
+                            <input
+                              type="text"
+                              value={item.phone}
+                              onChange={(e) =>
+                                updateContact(
+                                  index,
+                                  "phone",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="07 3123 4567"
+                              className="input"
+                            />
+                          </td>
+
+                          <td className="px-2 py-3 text-center">
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeContact(index)
+                              }
+                              className="text-red-500 hover:text-red-700"
+                              title="Remove Contact"
+                            >
+                              ✕
+                            </button>
+
+                          </td>
+
+                        </tr>
+
+                      ))}
+
+                    </tbody>
+
+                  </table>
+
+                </div>
+
+              ) : (
+
+                <div className="py-8 text-center text-sm text-gray-400">
+                  No contacts added yet.
+                </div>
+
+              )}
+
+            </div>
+
+          </section>
+
+          {/* ====================================================
+              Notes
+          ==================================================== */}
+
           <section className="bg-white border border-gray-200 rounded-xl mb-6">
 
             <div className="px-6 py-5 border-b border-gray-200">
@@ -262,8 +447,10 @@ export default function NewClientPage() {
 
           </section>
 
+          {/* ====================================================
+              Actions
+          ==================================================== */}
 
-          {/* Actions */}
           <div className="flex items-center justify-end gap-3">
 
             <Link
@@ -276,7 +463,7 @@ export default function NewClientPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Client"}
             </button>
@@ -292,9 +479,9 @@ export default function NewClientPage() {
 }
 
 
-/* =========================
+/* ============================================================
    Form Field
-========================= */
+============================================================ */
 
 function FormField({
   label,

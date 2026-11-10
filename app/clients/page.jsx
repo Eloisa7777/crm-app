@@ -35,9 +35,15 @@ export default function ClientsPage() {
             id: doc.id,
             name: client.name || "",
             abn: client.abn || "",
-            contact: client.contact || "",
-            email: client.email || "",
-            phone: client.phone || "-",
+
+            contacts: Array.isArray(client.contacts)
+              ? client.contacts.map((item) => ({
+                  contactName: item.contactName || "",
+                  email: item.email || "",
+                  phone: item.phone || "",
+                }))
+              : [],
+
             address: client.address || "-",
             status: client.status || "Active",
             orders: client.orders || 0,
@@ -63,12 +69,19 @@ export default function ClientsPage() {
 
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
-      const searchText = search.toLowerCase();
+      const searchText = search.toLowerCase().trim();
 
       const matchesSearch =
         client.name.toLowerCase().includes(searchText) ||
-        client.contact.toLowerCase().includes(searchText) ||
-        client.email.toLowerCase().includes(searchText);
+        client.contacts.some((contact) =>
+          [
+            contact.contactName,
+            contact.email,
+            contact.phone,
+          ].some((value) =>
+            value.toLowerCase().includes(searchText)
+          )
+        );
 
       const matchesStatus =
         status === "All" || client.status === status;
@@ -143,6 +156,7 @@ export default function ClientsPage() {
     <div className="min-h-screen">
 
       {/* Header */}
+
       <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
 
         <div>
@@ -164,11 +178,12 @@ export default function ClientsPage() {
 
       </header>
 
-
       {/* Content */}
+
       <div className="p-8">
 
         {/* Search / Filter */}
+
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
 
           <div className="flex flex-col md:flex-row gap-3">
@@ -177,7 +192,7 @@ export default function ClientsPage() {
 
               <input
                 type="text"
-                placeholder="Search clients..."
+                placeholder="Search clients, contacts, emails or phones..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="input"
@@ -199,8 +214,8 @@ export default function ClientsPage() {
 
         </div>
 
-
         {/* Client Table */}
+
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
           <div className="px-6 py-5 border-b border-gray-200">
@@ -215,7 +230,6 @@ export default function ClientsPage() {
             </p>
 
           </div>
-
 
           <div className="overflow-x-auto">
 
@@ -251,73 +265,92 @@ export default function ClientsPage() {
                 </tr>
               </thead>
 
-
               <tbody>
 
-                {filteredClients.map((client) => (
+                {filteredClients.map((client) => {
+                  const firstContact = client.contacts[0];
+                  const additionalContacts = Math.max(
+                    client.contacts.length - 1,
+                    0
+                  );
 
-                  <tr
-                    key={client.id}
-                    className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
-                  >
+                  return (
+                    <tr
+                      key={client.id}
+                      className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
+                    >
 
-                    <td className="px-6 py-4">
+                      {/* Client */}
 
-                      <Link
-                        href={`/clients/${client.id}`}
-                        className="font-medium text-gray-900 hover:underline"
-                      >
-                        {client.name}
-                      </Link>
+                      <td className="px-6 py-4">
 
-                      <div className="text-xs text-gray-500 mt-1">
-                        ABN {client.abn}
-                      </div>
+                        <Link
+                          href={`/clients/${client.id}`}
+                          className="font-medium text-gray-900 hover:underline"
+                        >
+                          {client.name}
+                        </Link>
 
-                    </td>
+                        <div className="text-xs text-gray-500 mt-1">
+                          ABN {client.abn || "-"}
+                        </div>
 
+                      </td>
 
-                    <td className="px-6 py-4 text-gray-600">
-                      {client.contact}
-                    </td>
+                      {/* Contact Name */}
 
+                      <td className="px-6 py-4 text-gray-600">
 
-                    <td className="px-6 py-4 text-gray-600">
-                      {client.phone}
-                    </td>
+                        {firstContact?.contactName || "-"}
 
+                        {additionalContacts > 0 && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            +{additionalContacts} more
+                          </div>
+                        )}
 
-                    <td className="px-6 py-4 text-gray-600">
-                      {client.email}
-                    </td>
+                      </td>
 
+                      {/* Phone */}
 
-                    <td className="px-6 py-4">
-                      <StatusBadge status={client.status} />
-                    </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {firstContact?.phone || "-"}
+                      </td>
 
+                      {/* Email */}
 
-                    <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-gray-600">
+                        {firstContact?.email || "-"}
+                      </td>
 
-                      <Link
-                        href={`/clients/${client.id}`}
-                        className="text-sm font-medium text-gray-700 hover:text-gray-900"
-                      >
-                        View
-                      </Link>
+                      {/* Status */}
 
-                    </td>
+                      <td className="px-6 py-4">
+                        <StatusBadge status={client.status} />
+                      </td>
 
-                  </tr>
+                      {/* Actions */}
 
-                ))}
+                      <td className="px-6 py-4 text-right">
+
+                        <Link
+                          href={`/clients/${client.id}`}
+                          className="text-sm font-medium text-gray-700 hover:text-gray-900"
+                        >
+                          View
+                        </Link>
+
+                      </td>
+
+                    </tr>
+                  );
+                })}
 
               </tbody>
 
             </table>
 
           </div>
-
 
           {filteredClients.length === 0 && (
             <div className="px-6 py-12 text-center text-sm text-gray-500">
@@ -353,4 +386,3 @@ function StatusBadge({ status }) {
     </span>
   );
 }
-

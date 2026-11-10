@@ -47,15 +47,6 @@ export default function QuotePage() {
             id: doc.id,
 
             /* ---------------------------------------------
-               Quote Number
-               Currently optional because New Quote
-               does not generate one yet.
-            --------------------------------------------- */
-
-            quoteNumber:
-              quoteData.quoteNumber || "",
-
-            /* ---------------------------------------------
                Client
                Prefer client snapshot.
             --------------------------------------------- */
@@ -133,9 +124,6 @@ export default function QuotePage() {
         search.toLowerCase().trim();
 
       const matchesSearch =
-        quote.quoteNumber
-          .toLowerCase()
-          .includes(searchText) ||
         quote.client
           .toLowerCase()
           .includes(searchText) ||
@@ -282,10 +270,6 @@ export default function QuotePage() {
             <tr>
 
               <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-500">
-                Quote Number
-              </th>
-
-              <th className="px-6 py-4 text-left text-xs font-medium uppercase text-gray-500">
                 Client
               </th>
 
@@ -343,17 +327,6 @@ export default function QuotePage() {
                     }
                     className="cursor-pointer transition hover:bg-gray-50"
                   >
-
-                    {/* Quote Number */}
-
-                    <td className="px-6 py-4">
-
-                      <div className="font-medium text-gray-900">
-                        {quote.quoteNumber ||
-                          "-"}
-                      </div>
-
-                    </td>
 
                     {/* Client */}
 
