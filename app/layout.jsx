@@ -94,7 +94,7 @@ const { adminAuth, adminDb } = await getFirebaseAdminServices();
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className="light">
       <body className="bg-gray-50 text-gray-900">
         <AppLayout
           isAuthenticated={isAuthenticated}
