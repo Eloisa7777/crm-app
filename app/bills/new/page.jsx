@@ -1,17 +1,21 @@
 
 "use client";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+
 import {
   collection,
   getDocs,
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+
 import { db } from "@/lib/firebase";
 
 export default function NewBillPage() {
   const router = useRouter();
+
   /* =====================================================
      Supplier / Subcontractor Data
   ===================================================== */
@@ -20,10 +24,10 @@ export default function NewBillPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
-  const [POs, setPOs] = useState([]);
-  const [loadingPOs, setLoadingPOs] = useState(true);
+
   const selectedSupplier = useMemo(
-    () => suppliers.find((item) => item.id === selectedSupplierId) || null,
+    () =>
+      suppliers.find((item) => item.id === selectedSupplierId) || null,
     [suppliers, selectedSupplierId]
   );
 
@@ -35,22 +39,31 @@ export default function NewBillPage() {
   const [loadingProjects, setLoadingProjects] = useState(true);
 
   /* =====================================================
+     Purchase Order Data
+  ===================================================== */
+
+  const [POs, setPOs] = useState([]);
+  const [loadingPOs, setLoadingPOs] = useState(true);
+
+  /* =====================================================
      Bill Form
   ===================================================== */
 
-const [bill, setBill] = useState({
-  billNumber: "",
-  billDate: new Date().toISOString().slice(0, 10),
-  dueDate: "",
-  projectId: "",
-  projectName: "",
-  poId: "",
-  poNumber: "",
-  notes: "",
-});
+  const [bill, setBill] = useState({
+    billNumber: "",
+    billDate: new Date().toISOString().slice(0, 10),
+    dueDate: "",
+    projectId: "",
+    projectName: "",
+    poId: "",
+    poNumber: "",
+    notes: "",
+  });
 
   /* =====================================================
      Bill Items
+
+     item tax defaults to false，GST TRUE
   ===================================================== */
 
   const [items, setItems] = useState([
@@ -58,12 +71,14 @@ const [bill, setBill] = useState({
       description: "",
       quantity: 1,
       rate: 0,
-      tax: true,
+      tax: false,
     },
   ]);
 
+  const [includeGST, setIncludeGST] = useState(true);
+
   /* =====================================================
-     Save / PDF State
+     Save State
   ===================================================== */
 
   const [saving, setSaving] = useState(false);
@@ -81,7 +96,6 @@ const [bill, setBill] = useState({
     async function loadSuppliers() {
       setLoadingSuppliers(true);
       setError("");
-      setSelectedSupplierId("");
       setSuppliers([]);
 
       try {
@@ -129,11 +143,17 @@ const [bill, setBill] = useState({
   ===================================================== */
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadProjects() {
       setLoadingProjects(true);
 
       try {
-        const snapshot = await getDocs(collection(db, "projects"));
+        const snapshot = await getDocs(
+          collection(db, "projects")
+        );
+
+        if (cancelled) return;
 
         const records = snapshot.docs.map((document) => ({
           id: document.id,
@@ -143,72 +163,244 @@ const [bill, setBill] = useState({
         setProjects(records);
       } catch (err) {
         console.error("Error loading projects:", err);
-        setError("Failed to load projects.");
+
+        if (!cancelled) {
+          setError("Failed to load projects.");
+        }
       } finally {
-        setLoadingProjects(false);
+        if (!cancelled) {
+          setLoadingProjects(false);
+        }
       }
     }
 
     loadProjects();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /* =====================================================
-   Load Purchase Orders
-===================================================== */
+     Load Purchase Orders
+  ===================================================== */
 
-useEffect(() => {
-  async function loadPurchaseOrders() {
-    setLoadingPOs(true);
+  useEffect(() => {
+    let cancelled = false;
 
-    try {
-      const snapshot = await getDocs(
-        collection(db, "purchaseOrders")
-      );
+    async function loadPurchaseOrders() {
+      setLoadingPOs(true);
 
-      const records = snapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      }));
+      try {
+        const snapshot = await getDocs(
+          collection(db, "purchaseOrders")
+        );
 
-      setPOs(records);
-    } catch (err) {
-      console.error("Error loading purchase orders:", err);
-      setError("Failed to load purchase orders.");
-    } finally {
-      setLoadingPOs(false);
+        if (cancelled) return;
+
+        const records = snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        }));
+
+        setPOs(records);
+      } catch (err) {
+        console.error("Error loading purchase orders:", err);
+
+        if (!cancelled) {
+          setError("Failed to load purchase orders.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingPOs(false);
+        }
+      }
     }
+
+    loadPurchaseOrders();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* =====================================================
+     Purchase Order Helpers
+  ===================================================== */
+
+  function getPONumber(po) {
+    return (
+      po.poNumber
+    );
   }
 
-  loadPurchaseOrders();
-}, []);
+  function getSupplierType(po) {
+    const type = (
+      po.supplierType
+    ).toLowerCase();
 
-/* =====================================================
-   Purchase Order Helpers
-===================================================== */
+    return type.includes("subcontractor")
+      ? "Subcontractor"
+      : "Supplier";
+  }
 
-function getPONumber(po) {
-  return (
-    po.poNumber ||
-    po.purchaseOrderNumber ||
-    po.number ||
-    po.orderNumber ||
-    po.id
-  );
-}
+  function getSupplierId(po) {
+    return (
+      po.supplierId ||
+      po.subcontractorId ||
+      po.supplier?.id ||
+      po.subcontractor?.id ||
+      ""
+    );
+  }
 
-function handlePOChange(event) {
-  const poId = event.target.value;
-  const selectedPO = POs.find((po) => po.id === poId);
+  function getProjectId(po) {
+    return (
+      po.projectId ||
+      ""
+    );
+  }
 
-  setBill((previous) => ({
-    ...previous,
-    poId: selectedPO?.id || "",
-    poNumber: selectedPO ? getPONumber(selectedPO) : "",
-  }));
+  function getPOItems(po) {
+    if (Array.isArray(po.items)) return po.items;
+    if (Array.isArray(po.lineItems)) return po.lineItems;
+    if (Array.isArray(po.orderItems)) return po.orderItems;
 
-  setSavedBill(null);
-  setSuccess("");
-}
+    return [];
+  }
+
+  function getPOItemDescription(item) {
+    return (
+      item.description ||
+      ""
+    );
+  }
+
+  function getPOItemQuantity(item) {
+    return Number(
+      item.qty ??
+      1
+    ) || 1;
+  }
+
+  function getPOItemRate(item) {
+    return Number(
+      item.rate ??
+      item.unitPrice ??
+      0
+    ) || 0;
+  }
+
+  /* =====================================================
+     Select Purchase Order
+     Automatically fill Supplier, Project and Items
+  ===================================================== */
+
+  function handlePOChange(event) {
+    const poId = event.target.value;
+
+    const selectedPO = POs.find(
+      (po) => po.id === poId
+    );
+
+    // Clear PO selection
+    if (!selectedPO) {
+      setBill((previous) => ({
+        ...previous,
+        poId: "",
+        poNumber: "",
+      }));
+
+      setSavedBill(null);
+      setSuccess("");
+      return;
+    }
+
+    // -----------------------------------------
+    // 1. Supplier / Subcontractor
+    // -----------------------------------------
+
+    const matchedSupplierType = getSupplierType(selectedPO);
+    const matchedSupplierId = getSupplierId(selectedPO);
+
+    // -----------------------------------------
+    // 2. Project
+    // -----------------------------------------
+
+    const projectId = getProjectId(selectedPO);
+
+    const matchedProject = projects.find(
+      (project) => project.id === projectId
+    );
+
+    const projectName = matchedProject
+      ? matchedProject.projectName ||
+        matchedProject.name ||
+        ""
+      : selectedPO.projectName ||
+        "";
+
+    // -----------------------------------------
+    // 3. Bill Items
+    // -----------------------------------------
+
+    const poItems = getPOItems(selectedPO);
+
+    const matchedItems = poItems.map((item) => ({
+      description: getPOItemDescription(item),
+      quantity: getPOItemQuantity(item),
+      rate: getPOItemRate(item),
+      tax: false,
+    }));
+
+    // -----------------------------------------
+    // 4. Update Supplier Type
+    // -----------------------------------------
+
+    setSupplierType(matchedSupplierType);
+
+    // -----------------------------------------
+    // 5. Update Supplier ID
+    // -----------------------------------------
+
+    setSelectedSupplierId(matchedSupplierId);
+
+    // -----------------------------------------
+    // 6. Update Bill Details
+    // -----------------------------------------
+
+    setBill((previous) => ({
+      ...previous,
+
+      poId: selectedPO.id,
+      poNumber: getPONumber(selectedPO),
+
+      projectId,
+      projectName,
+    }));
+
+    // -----------------------------------------
+    // 7. Update Bill Items
+    // -----------------------------------------
+
+    if (matchedItems.length > 0) {
+      setItems(matchedItems);
+    } else {
+      setItems([
+        {
+          description: "",
+          quantity: 1,
+          rate: 0,
+          tax: false,
+        },
+      ]);
+    }
+
+    setSavedBill(null);
+    setSuccess("");
+    setError("");
+  }
+
   /* =====================================================
      Form Handlers
   ===================================================== */
@@ -227,32 +419,37 @@ function handlePOChange(event) {
 
   function handleProjectChange(event) {
     const projectId = event.target.value;
+
     const selectedProject =
       projects.find((project) => project.id === projectId) || null;
 
     setBill((previous) => ({
       ...previous,
       projectId,
+
       projectName: selectedProject
         ? selectedProject.projectName ||
           selectedProject.name ||
-          selectedProject.title ||
           ""
         : "",
     }));
 
     setSavedBill(null);
+    setSuccess("");
   }
 
   function handleSupplierTypeChange(event) {
     setSupplierType(event.target.value);
+
     setSelectedSupplierId("");
+
     setSavedBill(null);
     setSuccess("");
   }
 
   function handleSupplierChange(event) {
     setSelectedSupplierId(event.target.value);
+
     setSavedBill(null);
     setSuccess("");
   }
@@ -268,6 +465,7 @@ function handlePOChange(event) {
 
         return {
           ...item,
+
           [field]:
             field === "quantity" || field === "rate"
               ? value === ""
@@ -279,6 +477,7 @@ function handlePOChange(event) {
     );
 
     setSavedBill(null);
+    setSuccess("");
   }
 
   function addItem() {
@@ -288,9 +487,12 @@ function handlePOChange(event) {
         description: "",
         quantity: 1,
         rate: 0,
-        tax: true,
+        tax: false,
       },
     ]);
+
+    setSavedBill(null);
+    setSuccess("");
   }
 
   function removeItem(index) {
@@ -301,49 +503,39 @@ function handlePOChange(event) {
             description: "",
             quantity: 1,
             rate: 0,
-            tax: true,
+            tax: false,
           },
         ];
       }
 
-      return previous.filter((_, itemIndex) => itemIndex !== index);
+      return previous.filter(
+        (_, itemIndex) => itemIndex !== index
+      );
     });
 
     setSavedBill(null);
+    setSuccess("");
   }
 
   /* =====================================================
      Calculate Totals
   ===================================================== */
 
-  const subtotal = useMemo(
-    () =>
-      items.reduce(
-        (sum, item) =>
-          sum +
-          (Number(item.quantity) || 0) *
-            (Number(item.rate) || 0),
-        0
-      ),
-    [items]
-  );
+    const subtotal = useMemo(
+      () =>
+        items.reduce(
+          (sum, item) =>
+            sum +
+            (Number(item.quantity) || 0) *
+              (Number(item.rate) || 0) * (item.tax ? 1.1 : 1) || 0,
+          0
+        ),
+      [items]
+    );
 
-  const gst = useMemo(
-    () =>
-      items.reduce((sum, item) => {
-        if (!item.tax) return sum;
+    const gst = includeGST ? subtotal * 0.1 : 0;
 
-        return (
-          sum +
-          (Number(item.quantity) || 0) *
-            (Number(item.rate) || 0) *
-            0.1
-        );
-      }, 0),
-    [items]
-  );
-
-  const total = subtotal + gst;
+    const total = subtotal + gst;
 
   function formatCurrency(value) {
     return new Intl.NumberFormat("en-AU", {
@@ -406,32 +598,39 @@ function handlePOChange(event) {
         (item) => item.quantity <= 0 || item.rate < 0
       )
     ) {
-      setError("Quantity must be greater than zero and rate cannot be negative.");
+      setError(
+        "Quantity must be greater than zero and rate cannot be negative."
+      );
       return;
     }
 
-    const calculatedSubtotal = validItems.reduce(
-      (sum, item) => sum + item.quantity * item.rate,
-      0
-    );
-
-    const calculatedGST = validItems.reduce(
-      (sum, item) =>
-        sum + (item.tax ? item.quantity * item.rate * 0.1 : 0),
-      0
-    );
-
-    const calculatedTotal = calculatedSubtotal + calculatedGST;
+    // -----------------------------------------
+    // Supplier Snapshot
+    // -----------------------------------------
 
     const supplierSnapshot = {
       id: selectedSupplier.id,
-      name: selectedSupplier.name || "",
+
+      name:
+        selectedSupplier.name ||
+        selectedSupplier.companyName ||
+        "",
+
       abn: selectedSupplier.abn || "",
-      contact: selectedSupplier.contact || "",
+
+      contact:
+        selectedSupplier.contact ||
+        selectedSupplier.contactName ||
+        "",
+
       email: selectedSupplier.email || "",
       phone: selectedSupplier.phone || "",
       address: selectedSupplier.address || "",
     };
+
+    // -----------------------------------------
+    // Bill Data
+    // -----------------------------------------
 
     const billData = {
       billNumber: bill.billNumber.trim(),
@@ -443,7 +642,7 @@ function handlePOChange(event) {
       supplierId: selectedSupplier.id,
       supplier: supplierSnapshot,
 
-      // Keep flat fields for compatibility with existing displays
+      // Flat fields for compatibility
       supplierName: supplierSnapshot.name,
       supplierAddress: supplierSnapshot.address,
 
@@ -457,37 +656,34 @@ function handlePOChange(event) {
 
       // Items and totals
       items: validItems,
-      subtotal: calculatedSubtotal,
-      gst: calculatedGST,
-      total: calculatedTotal,
-
+      subtotal: subtotal,
+      gst: gst,
+      total: total,
+      includeGST: includeGST,
       notes: bill.notes.trim(),
+
       status: "Awaiting",
+
       createdAt: serverTimestamp(),
     };
 
     setSaving(true);
 
     try {
-      const documentRef = await addDoc(
+      await addDoc(
         collection(db, "bills"),
         billData
       );
 
-      const pdfData = {
-        ...billData,
-        id: documentRef.id,
-        createdAt: new Date().toISOString(),
-      };
-
-      setSavedBill(pdfData);
       setSuccess("Bill saved successfully.");
 
       router.push("/bills");
 
     } catch (err) {
       console.error("Error saving bill:", err);
+
       setError("Failed to save bill. Please try again.");
+
     } finally {
       setSaving(false);
     }
@@ -499,12 +695,20 @@ function handlePOChange(event) {
 
   return (
     <main className="mx-auto max-w-6xl p-6">
+
+      {/* Page Header */}
+
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Create Bill</h1>
+        <h1 className="text-2xl font-bold">
+          Create Bill
+        </h1>
+
         <p className="mt-1 text-sm text-gray-500">
           Create a bill for a supplier or subcontractor.
         </p>
       </div>
+
+      {/* Error */}
 
       {error && (
         <div className="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
@@ -512,20 +716,82 @@ function handlePOChange(event) {
         </div>
       )}
 
+      {/* Success */}
+
       {success && (
         <div className="mb-4 rounded border border-green-300 bg-green-50 p-3 text-sm text-green-700">
           {success}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Supplier / Subcontractor */}
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6"
+      >
+
+        {/* =================================================
+            Purchase Order
+        ================================================= */}
+
         <section className="rounded-lg border bg-white p-5">
+
+          <h2 className="mb-4 text-lg font-semibold">
+            Purchase Order
+          </h2>
+
+          <div>
+            <label
+              htmlFor="poId"
+              className="mb-1 block text-sm font-medium"
+            >
+              PO Number
+            </label>
+
+            <select
+              id="poId"
+              value={bill.poId}
+              onChange={handlePOChange}
+              className="w-full rounded border p-2"
+              disabled={loadingPOs}
+            >
+              <option value="">
+                {loadingPOs
+                  ? "Loading purchase orders..."
+                  : "Select PO (Optional)"}
+              </option>
+
+              {POs.map((po) => (
+                <option
+                  key={po.id}
+                  value={po.id}
+                >
+                  {getPONumber(po)}
+                </option>
+              ))}
+            </select>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Selecting a PO will automatically fill supplier,
+              project and bill items.
+            </p>
+          </div>
+
+        </section>
+
+        {/* =================================================
+            Supplier / Subcontractor Details
+        ================================================= */}
+
+        <section className="rounded-lg border bg-white p-5">
+
           <h2 className="mb-4 text-lg font-semibold">
             Supplier/Subcontractor Details
           </h2>
 
           <div className="grid gap-4 md:grid-cols-2">
+
+            {/* Supplier Type */}
+
             <div>
               <label
                 htmlFor="supplierType"
@@ -541,17 +807,26 @@ function handlePOChange(event) {
                 className="w-full rounded border p-2"
                 required
               >
-                <option value="Supplier">Supplier</option>
-                <option value="Subcontractor">Subcontractor</option>
+                <option value="Supplier">
+                  Supplier
+                </option>
+
+                <option value="Subcontractor">
+                  Subcontractor
+                </option>
               </select>
             </div>
+
+            {/* Supplier */}
 
             <div>
               <label
                 htmlFor="supplierId"
                 className="mb-1 block text-sm font-medium"
               >
-                {supplierType} <span className="text-red-500">*</span>
+                {supplierType}
+                {" "}
+                <span className="text-red-500">*</span>
               </label>
 
               <select
@@ -569,63 +844,92 @@ function handlePOChange(event) {
                 </option>
 
                 {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name || supplier.companyName || "Unnamed"}
+                  <option
+                    key={supplier.id}
+                    value={supplier.id}
+                  >
+                    {supplier.name ||
+                      supplier.companyName ||
+                      "Unnamed"}
                   </option>
                 ))}
               </select>
             </div>
+
           </div>
+
+          {/* Supplier Information */}
 
           {selectedSupplier && (
             <div className="mt-5 grid gap-3 rounded bg-gray-50 p-4 text-sm md:grid-cols-2">
+
               <p>
-                <strong>Name:</strong>{" "}
+                <strong>Name:</strong>
+                {" "}
                 {selectedSupplier.name ||
                   selectedSupplier.companyName ||
                   "-"}
               </p>
 
               <p>
-                <strong>ABN:</strong> {selectedSupplier.abn || "-"}
+                <strong>ABN:</strong>
+                {" "}
+                {selectedSupplier.abn || "-"}
               </p>
 
               <p>
-                <strong>Contact:</strong>{" "}
+                <strong>Contact:</strong>
+                {" "}
                 {selectedSupplier.contact ||
                   selectedSupplier.contactName ||
                   "-"}
               </p>
 
               <p>
-                <strong>Email:</strong> {selectedSupplier.email || "-"}
+                <strong>Email:</strong>
+                {" "}
+                {selectedSupplier.email || "-"}
               </p>
 
               <p>
-                <strong>Phone:</strong> {selectedSupplier.phone || "-"}
+                <strong>Phone:</strong>
+                {" "}
+                {selectedSupplier.phone || "-"}
               </p>
 
               <p>
-                <strong>Address:</strong>{" "}
+                <strong>Address:</strong>
+                {" "}
                 {selectedSupplier.address || "-"}
               </p>
+
             </div>
           )}
+
         </section>
 
-        {/* Bill Details */}
+        {/* =================================================
+            Bill Details
+        ================================================= */}
+
         <section className="rounded-lg border bg-white p-5">
+
           <h2 className="mb-4 text-lg font-semibold">
             Bill Details
           </h2>
 
           <div className="grid gap-4 md:grid-cols-2">
+
+            {/* Bill Number */}
+
             <div>
               <label
                 htmlFor="billNumber"
                 className="mb-1 block text-sm font-medium"
               >
-                Bill Number <span className="text-red-500">*</span>
+                Bill Number
+                {" "}
+                <span className="text-red-500">*</span>
               </label>
 
               <input
@@ -638,12 +942,16 @@ function handlePOChange(event) {
               />
             </div>
 
+            {/* Project */}
+
             <div>
               <label
                 htmlFor="projectId"
                 className="mb-1 block text-sm font-medium"
               >
-                Project <span className="text-red-500">*</span>
+                Project
+                {" "}
+                <span className="text-red-500">*</span>
               </label>
 
               <select
@@ -655,11 +963,16 @@ function handlePOChange(event) {
                 required
               >
                 <option value="">
-                  {loadingProjects ? "Loading projects..." : "Select Project"}
+                  {loadingProjects
+                    ? "Loading projects..."
+                    : "Select Project"}
                 </option>
 
                 {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
+                  <option
+                    key={project.id}
+                    value={project.id}
+                  >
                     {project.projectName ||
                       project.name ||
                       project.title ||
@@ -669,18 +982,22 @@ function handlePOChange(event) {
               </select>
             </div>
 
+            {/* Bill Date */}
+
             <div>
               <label
-                htmlFor="invoiceDate"
+                htmlFor="billDate"
                 className="mb-1 block text-sm font-medium"
               >
-                Bill Date <span className="text-red-500">*</span>
+                Bill Date
+                {" "}
+                <span className="text-red-500">*</span>
               </label>
 
               <input
-                id="invoiceDate"
+                id="billDate"
                 type="date"
-                name="invoiceDate"
+                name="billDate"
                 value={bill.billDate}
                 onChange={handleBillChange}
                 className="w-full rounded border p-2"
@@ -688,12 +1005,16 @@ function handlePOChange(event) {
               />
             </div>
 
+            {/* Due Date */}
+
             <div>
               <label
                 htmlFor="dueDate"
                 className="mb-1 block text-sm font-medium"
               >
-                Due Date <span className="text-red-500">*</span>
+                Due Date
+                {" "}
+                <span className="text-red-500">*</span>
               </label>
 
               <input
@@ -706,41 +1027,22 @@ function handlePOChange(event) {
                 required
               />
             </div>
+
           </div>
+
         </section>
 
-        {/* PO Number */}
-        <div>
-          <label
-            htmlFor="poId"
-            className="mb-1 block text-sm font-medium"
-          >
-            PO Number
-          </label>
+        {/* =================================================
+            Bill Items
+        ================================================= */}
 
-          <select
-            id="poId"
-            value={bill.poId}
-            onChange={handlePOChange}
-            className="w-full rounded border p-2"
-            disabled={loadingPOs}
-          >
-            <option value="">
-              {loadingPOs ? "Loading purchase orders..." : "Select PO (Optional)"}
-            </option>
-
-            {POs.map((po) => (
-              <option key={po.id} value={po.id}>
-                {getPONumber(po)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Bill Items */}
         <section className="rounded-lg border bg-white p-5">
+
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Bill Items</h2>
+
+            <h2 className="text-lg font-semibold">
+              Bill Items
+            </h2>
 
             <button
               type="button"
@@ -749,15 +1051,22 @@ function handlePOChange(event) {
             >
               + Add Item
             </button>
+
           </div>
 
           <div className="space-y-4">
+
             {items.map((item, index) => (
+
               <div
                 key={index}
                 className="grid gap-3 rounded border p-4 md:grid-cols-12"
               >
+
+                {/* Description */}
+
                 <div className="md:col-span-5">
+
                   <label className="mb-1 block text-sm font-medium">
                     Description
                   </label>
@@ -775,9 +1084,13 @@ function handlePOChange(event) {
                     placeholder="Item description"
                     required
                   />
+
                 </div>
 
+                {/* Quantity */}
+
                 <div className="md:col-span-2">
+
                   <label className="mb-1 block text-sm font-medium">
                     Quantity
                   </label>
@@ -797,9 +1110,13 @@ function handlePOChange(event) {
                     className="w-full rounded border p-2"
                     required
                   />
+
                 </div>
 
+                {/* Rate */}
+
                 <div className="md:col-span-2">
+
                   <label className="mb-1 block text-sm font-medium">
                     Rate (AUD)
                   </label>
@@ -810,29 +1127,45 @@ function handlePOChange(event) {
                     step="0.01"
                     value={item.rate}
                     onChange={(event) =>
-                      handleItemChange(index, "rate", event.target.value)
+                      handleItemChange(
+                        index,
+                        "rate",
+                        event.target.value
+                      )
                     }
                     className="w-full rounded border p-2"
                     required
                   />
+
                 </div>
 
+                {/* GST */}
+
                 <div className="md:col-span-1">
+
                   <label className="mb-1 block text-sm font-medium">
-                    GST
+                    TAX
                   </label>
 
                   <input
                     type="checkbox"
                     checked={item.tax}
                     onChange={(event) =>
-                      handleItemChange(index, "tax", event.target.checked)
+                      handleItemChange(
+                        index,
+                        "tax",
+                        event.target.checked
+                      )
                     }
                     className="mt-3 h-4 w-4"
                   />
+
                 </div>
 
+                {/* Amount */}
+
                 <div className="md:col-span-2">
+
                   <label className="mb-1 block text-sm font-medium">
                     Amount
                   </label>
@@ -840,7 +1173,8 @@ function handlePOChange(event) {
                   <div className="rounded bg-gray-50 p-2 text-sm">
                     {formatCurrency(
                       (Number(item.quantity) || 0) *
-                        (Number(item.rate) || 0)
+                        (Number(item.rate) || 0) *
+                          (item.tax ? 1.1 : 1)
                     )}
                   </div>
 
@@ -851,33 +1185,69 @@ function handlePOChange(event) {
                   >
                     Remove
                   </button>
+
                 </div>
+
               </div>
+
             ))}
+
           </div>
 
           {/* Totals */}
-          <div className="ml-auto mt-6 max-w-sm space-y-2 text-sm">
+
+          <div className="ml-auto mt-6 max-w-sm space-y-3 text-sm">
+
             <div className="flex justify-between">
               <span>Subtotal (excl. GST)</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
 
-            <div className="flex justify-between">
-              <span>GST</span>
+            {/* GST Toggle */}
+
+            <div className="flex items-center justify-between">
+
+              <label
+                htmlFor="includeGST"
+                className="flex cursor-pointer items-center gap-2"
+              >
+                <input
+                  id="includeGST"
+                  type="checkbox"
+                  checked={includeGST}
+                  onChange={(event) =>
+                    setIncludeGST(event.target.checked)
+                  }
+                  className="h-4 w-4"
+                />
+
+                <span>GST (10%)</span>
+              </label>
+
               <span>{formatCurrency(gst)}</span>
+
             </div>
+
+            {/* Total */}
 
             <div className="flex justify-between border-t pt-3 text-base font-bold">
-              <span>Total (incl. GST)</span>
+              <span>Total {includeGST ? "(incl. GST)" : "(excl. GST)"}</span>
               <span>{formatCurrency(total)}</span>
             </div>
+
           </div>
+
         </section>
 
-        {/* Notes */}
+        {/* =================================================
+            Notes
+        ================================================= */}
+
         <section className="rounded-lg border bg-white p-5">
-          <h2 className="mb-4 text-lg font-semibold">Notes</h2>
+
+          <h2 className="mb-4 text-lg font-semibold">
+            Notes
+          </h2>
 
           <textarea
             name="notes"
@@ -887,24 +1257,33 @@ function handlePOChange(event) {
             className="w-full rounded border p-2"
             placeholder="Additional notes..."
           />
+
         </section>
 
-        {/* Submit */}
+        {/* =================================================
+            Submit
+        ================================================= */}
+
         <div className="flex flex-wrap justify-end gap-3">
+
           <button
             type="submit"
             disabled={
               saving ||
               loadingSuppliers ||
               loadingProjects ||
+              loadingPOs ||
               !selectedSupplier
             }
             className="rounded bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save Bill"}
           </button>
+
         </div>
+
       </form>
+
     </main>
   );
 }

@@ -72,6 +72,7 @@ export default function BillDetailPage() {
     client: { ...emptyContact },
     clientId: "",
     items: [],
+    includeGST: true,
     notes: "",
     accountManager: "",
     accountManagerEmail: "",
@@ -187,6 +188,10 @@ function normaliseItems(items) {
 
     return {
       billNumber: data.billNumber || "",
+        includeGST:
+          typeof data.includeGST === "boolean"
+            ? data.includeGST
+            : true,
       projectId: data.projectId || "",
       projectName: data.projectName || "",
       status: data.status || "Awaiting Payment",
@@ -415,35 +420,39 @@ function normaliseItems(items) {
 
   /* =====================================================
      Totals
-     Item GST is included in each line total.
-     Additional GST is calculated on the pre-GST amount.
+
+     Item TAX:
+     - Independent for each item
+     - Adds 10% to that item's line amount
+
+     Bill GST:
+     - Independent from Item TAX
+     - Controlled by form.includeGST
+     - Adds 10% to subtotal
   ===================================================== */
 
   const totals = useMemo(() => {
     const itemSubtotal = form.items.reduce((sum, item) => {
       const qty = Number(item?.qty) || 0;
       const unitPrice = Number(item?.unitPrice) || 0;
+      const hasTax = Boolean(item?.tax);
 
-      return sum + qty * unitPrice;
+      const lineAmount =
+        qty * unitPrice * (hasTax ? 1.1 : 1);
+
+      return sum + lineAmount;
     }, 0);
 
-    const itemGST = form.items.reduce((sum, item) => {
-      const qty = Number(item?.qty) || 0;
-      const unitPrice = Number(item?.unitPrice) || 0;
-
-      return sum + (
-        item?.tax === true
-          ? qty * unitPrice * 0.1
-          : 0
-      );
-    }, 0);
+    const gst = form.includeGST
+      ? itemSubtotal * 0.1
+      : 0;
 
     return {
       itemSubtotal,
-      itemGST,
-      total: itemSubtotal + itemGST,
+      gst,
+      total: itemSubtotal + gst,
     };
-  }, [form.items]);
+  }, [form.items, form.includeGST]);
 
   /* =====================================================
      Generic Form Update
@@ -595,7 +604,7 @@ function normaliseItems(items) {
           description: "",
           qty: 1,
           unitPrice: 0,
-          tax: true,
+          tax: false,
         },
       ],
     }));
@@ -690,37 +699,54 @@ function normaliseItems(items) {
           "",
       };
 
+      /* -----------------------------------------
+         Clean Bill Items
+      ----------------------------------------- */
 
       const cleanItems = form.items.map((item) => {
         const qty = Number(item?.qty) || 0;
         const unitPrice = Number(item?.unitPrice) || 0;
         const tax = Boolean(item?.tax);
 
+        // Item TAX is calculated independently
         const lineSubtotal = qty * unitPrice;
-        const lineGST = tax ? lineSubtotal * 0.1 : 0;
+
+        const lineTax = tax
+          ? lineSubtotal * 0.1
+          : 0;
+
+        const lineTotal = lineSubtotal + lineTax;
 
         return {
           description: item?.description || "",
           qty,
           unitPrice,
           tax,
-          total: lineSubtotal + lineGST,
+          total: lineTotal,
         };
       });
 
+      /* -----------------------------------------
+         Calculate Bill Subtotal
+         Includes individual Item TAX
+      ----------------------------------------- */
+
       const cleanItemSubtotal = cleanItems.reduce(
-        (sum, item) => sum + item.qty * item.unitPrice,
+        (sum, item) => sum + item.total,
         0
       );
 
-      const cleanGst = cleanItems.reduce(
-        (sum, item) =>
-          sum +
-          (item.tax
-            ? item.qty * item.unitPrice * 0.1
-            : 0),
-        0
-      );
+      /* -----------------------------------------
+         Calculate Additional Bill GST
+      ----------------------------------------- */
+
+      const cleanGst = form.includeGST
+        ? cleanItemSubtotal * 0.1
+        : 0;
+
+      /* -----------------------------------------
+         Final Total
+      ----------------------------------------- */
 
       const cleanTotal = cleanItemSubtotal + cleanGst;
 
@@ -747,6 +773,7 @@ function normaliseItems(items) {
         poId: form.poId || "",
         poNumber: form.poNumber || "",
         items: cleanItems,
+        includeGST: form.includeGST,
         notes: form.notes || "",
         accountManager: form.accountManager || "",
         accountManagerEmail: form.accountManagerEmail || "",
@@ -1290,7 +1317,7 @@ function normaliseItems(items) {
                     <th className="pb-3 pr-4">Description</th>
                     <th className="pb-3 pr-4">Qty</th>
                     <th className="pb-3 pr-4">Unit Price</th>
-                    <th className="pb-3 pr-4">GST</th>
+                    <th className="pb-3 pr-4">Tax</th>
                     <th className="pb-3 text-right">Line Total</th>
 
                     {editing && (
@@ -1304,10 +1331,10 @@ function normaliseItems(items) {
                     const qty = Number(item?.qty) || 0;
                     const unitPrice =
                       Number(item?.unitPrice) || 0;
-                    const hasGST = Boolean(item?.tax);
-                    const lineSubtotal = qty * unitPrice;
-                    const lineGST = hasGST ? lineSubtotal * 0.1 : 0;
-                    const lineTotal = lineSubtotal + lineGST;
+                    const hasTax = Boolean(item?.tax);
+
+                    const lineTotal =
+                      qty * unitPrice * (hasTax ? 1.1 : 1);
 
                     return (
                       <tr
@@ -1387,7 +1414,7 @@ function normaliseItems(items) {
                                 }
                                 className="h-4 w-4 cursor-pointer"
                               />
-                              <span>GST (10%)</span>
+                              <span>TAX (10%)</span>
                             </label>
                           ) : (
                             <span>{item.tax ? "Yes (10%)" : "No (0%)"}</span>
@@ -1417,26 +1444,55 @@ function normaliseItems(items) {
             </div>
           )}
 
-
           {/* Totals */}
 
           <div className="ml-auto mt-6 max-w-sm border-t pt-5">
+
+            {/* Subtotal */}
+
             <div className="mb-3 flex justify-between gap-4">
               <span className="text-gray-600">
-                Item Subtotal (excl. GST)
+                Subtotal (excl. GST)
               </span>
-              <span>{formatCurrency(totals.itemSubtotal)}</span>
+
+              <span>
+                {formatCurrency(totals.itemSubtotal)}
+              </span>
             </div>
+
+            {/* GST Toggle */}
 
             <div className="mb-3 flex justify-between gap-4">
-              <span className="text-gray-600">GST</span>
-              <span>{formatCurrency(totals.itemGST)}</span>
+
+              <label className="flex cursor-pointer items-center gap-2 text-gray-600">
+                {editing && (
+                  <input
+                    type="checkbox"
+                    checked={form.includeGST}
+                    onChange={(e) =>
+                      updateForm("includeGST", e.target.checked)
+                    }
+                    className="h-4 w-4 cursor-pointer"
+                  />
+                )}
+
+                <span>GST (10%)</span>
+              </label>
+
+              <span>{formatCurrency(totals.gst)}</span>
+
             </div>
 
+            {/* Total */}
+
             <div className="flex justify-between gap-4 text-lg font-bold">
-              <span>Total (incl. GST)</span>
+              <span>
+                Total {form.includeGST ? "(incl. GST)" : "(excl. GST)"}
+              </span>
+
               <span>{formatCurrency(totals.total)}</span>
             </div>
+
           </div>
 
         </section>
