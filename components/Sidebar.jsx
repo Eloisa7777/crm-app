@@ -12,15 +12,16 @@ import { useEffect, useState } from "react";
 
 const menuItems = [
   { name: "Dashboard", href: "/", icon: "▦", permission: "dashboard" },
-  {
-    name: "Quote",
-    href: "/quote",
-    icon: "▣",
-    children: [
-      { name: "Timeline", href: "/quote/timeline" },
-      { name: "Quote List", href: "/quote" },
-    ],
-  },
+{
+  name: "Quote",
+  href: "/quote",
+  icon: "▣",
+  permission: "quote",
+  children: [
+    { name: "Timeline", href: "/quote/timeline" },
+    { name: "Quote List", href: "/quote" },
+  ],
+},
   { name: "Projects", href: "/projects", icon: "▣", permission: "projects" },
   { name: "Suppliers", href: "/suppliers", icon: "♙", permission: "suppliers" },
   { name: "Subcontractors", href: "/subcontractors", icon: "♙", permission: "subcontractors" },
@@ -41,6 +42,7 @@ export default function Sidebar() {
   const router = useRouter();
 
   const [uid, setUid] = useState("");
+  const [quoteOpen, setQuoteOpen] = useState(false);
   const [role, setRole] = useState("");
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
@@ -112,6 +114,11 @@ export default function Sidebar() {
     };
   }, []);
 
+  useEffect(() => {
+  if (pathname.startsWith("/quote")) {
+    setQuoteOpen(true);
+  }
+}, [pathname]);
   // ============================================================
   // 4. RBAC Sidebar Filtering
   //
@@ -187,6 +194,8 @@ export default function Sidebar() {
                 item.href === "/"
                   ? pathname === "/"
                   : pathname.startsWith(item.href);
+
+            const hasChildren = Array.isArray(item.children);
 
             // Quote menu
             if (hasChildren) {
