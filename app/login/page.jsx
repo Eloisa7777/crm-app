@@ -532,12 +532,12 @@ export default function LoginPage() {
           <div className="absolute left-[20%] right-[20%] top-0 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
 
 
-          {/* Brand */}
+          Brand 
           <div className="mb-9 flex flex-col items-center text-center">
 
-            <div className="mb-5 flex h-[66px] w-[66px] items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] shadow-xl backdrop-blur-xl">
-              <BrandIcon />
-            </div>
+           {/* <div className="mb-5 flex h-[66px] w-[66px] items-center justify-center rounded-2xl border border-white/15 bg-white/[0.07] shadow-xl backdrop-blur-xl">
+              
+            </div>*/}
 
             <h1 className="text-2xl font-bold tracking-tight">
               YJ Linings
