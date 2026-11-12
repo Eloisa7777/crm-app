@@ -1,0 +1,1232 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YJ Project List</title>
+
+<style>
+:root{
+  --bg:#f5f6f8;--card:#fff;--text:#1d2330;
+  --muted:#6b7280;--line:#e3e6eb;--accent:#2563eb;
+  --total:#f0f4f8;--good:#15803d;--warn:#b45309
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1218;--card:#171b23;--text:#e7eaf0;
+    --muted:#9aa3b2;--line:#2a303b;--accent:#6ea8ff;
+    --total:#1f2632;--good:#4ade80;--warn:#fbbf24
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,
+  "PingFang SC","Microsoft YaHei",Arial,sans-serif
+}
+.wrap{max-width:1680px;margin:auto;padding:24px 16px 48px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+h1{font-size:21px;margin:0 0 4px}
+.muted{color:var(--muted);font-size:13px}
+.actions,.toolbar,.toolbar-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn,.tab,select,input{font:inherit;color:var(--text)}
+.btn,.tab{
+  background:var(--card);border:1px solid var(--line);
+  border-radius:8px;padding:7px 12px;cursor:pointer
+}
+.btn:hover,.tab:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.55;cursor:wait}
+.btn.primary,.tab[aria-selected="true"]{
+  background:var(--accent);color:white;border-color:var(--accent)
+}
+.lang{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+.lang button{border:0;background:none;color:var(--text);padding:7px 12px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin:18px 0}
+.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+.card .label{font-size:12px;color:var(--muted)}
+.card .val{font-size:20px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums}
+.statusbar{margin:12px 0;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--muted);font-size:12px}
+.statusbar.error{color:#dc2626;border-color:#dc2626}
+.tabs{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:14px 0 12px}
+.tabs select,.search{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.toolbar{justify-content:space-between;margin-bottom:12px}
+.toolbar-right{justify-content:flex-end}
+.search{width:min(260px,70vw)}
+.table-wrap{overflow:auto}
+table{width:100%;min-width:950px;border-collapse:collapse}
+th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:650;background:var(--total);white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tfoot td{font-weight:650;background:var(--total)}
+.empty{text-align:center;padding:32px;color:var(--muted)}
+.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--total);font-size:12px;white-space:nowrap}
+.pill.awarded{color:var(--good)}
+.pill.tender{color:var(--warn)}
+.hidden{display:none!important}
+@media print{
+  body{background:#fff;color:#000}
+  .wrap{max-width:none;padding:0}
+  .no-print,.statusbar{display:none!important}
+  .panel,.card{border:0}
+  table{min-width:0!important;font-size:9pt}
+  th,td{padding:5px;border:1px solid #bbb;color:#000}
+  th{background:#eee!important}
+  .cards{grid-template-columns:repeat(4,1fr)}
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1 data-i18n="title">YJ 项目统计表</h1>
+    <div class="muted" data-i18n="subtitle">
+      只读模式 · 数据来自 Firebase CRM-YJ 的 quote 和 Clients 集合
+    </div>
+  </div>
+
+  <div class="actions no-print">
+    <div class="lang">
+      <button data-lang="zh" aria-pressed="true">中文</button>
+      <button data-lang="en" aria-pressed="false">EN</button>
+    </div>
+    <button class="btn" id="refreshBtn" data-i18n="refresh">刷新数据</button>
+    <button class="btn" id="printBtn" data-i18n="pdf">打印 / PDF</button>
+    <button class="btn" id="jsonBtn" data-i18n="json">JSON 备份</button>
+    <button class="btn primary" id="xlsxBtn">Excel (.xlsx)</button>
+  </div>
+</header>
+
+<div id="connection" class="statusbar" role="status">
+  正在连接 Firebase…
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="label" data-i18n="projects">项目数</div>
+    <div class="val" id="totalProjects">—</div>
+  </div>
+  <div class="card">
+    <div class="label" data-i18n="awarded">中标数</div>
+    <div class="val" id="totalawarded">—</div>
+  </div>
+  <div class="card">
+    <div class="label" data-i18n="tenderTotal">投标金额合计</div>
+    <div class="val" id="totalTender">—</div>
+  </div>
+  <div class="card">
+    <div class="label" data-i18n="contractTotal">合同金额合计</div>
+    <div class="val" id="totalContract">—</div>
+  </div>
+</div>
+
+<div class="tabs no-print" id="tabs">
+  <select id="yearSelect" aria-label="Year"></select>
+  <button class="tab" id="projectsTab" aria-selected="true" data-i18n="projects">项目列表</button>
+  <button class="tab" id="clientsTab" aria-selected="false" data-i18n="clients">客户</button>
+</div>
+
+<section class="panel">
+  <div class="toolbar">
+    <div>
+      <strong id="panelTitle">年度汇总</strong>
+      <div class="muted" id="panelNote"></div>
+    </div>
+    <div class="toolbar-right no-print">
+      <input id="searchInput" class="search" type="search"
+        placeholder="快速搜索项目 / 客户 / 状态…">
+    </div>
+  </div>
+  <div id="content" class="table-wrap">
+    <div class="empty">等待 Firebase 数据…</div>
+  </div>
+</section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+// ============================================================
+// 1. Firebase configuration
+// ============================================================
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBlx8gbftIkvnRhrQByK0EuRfY0ASMTygg",
+  authDomain: "crm-yj.firebaseapp.com",
+  projectId: "crm-yj",
+  storageBucket: "crm-yj.firebasestorage.app",
+  messagingSenderId: "436337299218",
+  appId: "1:436337299218:web:8f7f607d5962e0d063edcb"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ============================================================
+// 2. State
+// ============================================================
+
+const $ = selector => document.querySelector(selector);
+
+let lang = "zh";
+let projects = [];
+let clients = [];
+let quotes = [];
+
+let activeView = "projects";
+let activeYear = "all";
+let lastLoadedAt = null;
+
+// ============================================================
+// 3. Translations
+// ============================================================
+
+const I18N = {
+  zh: {
+    title: "YJ 项目统计表",
+    subtitle: "只读模式 · 数据来自 Firebase CRM-YJ 的 quote 和 Clients 集合",
+    refresh: "刷新数据",
+    pdf: "打印 / PDF",
+    json: "JSON 备份",
+    projects: "项目数",
+    awarded: "中标数",
+    tenderTotal: "投标金额合计",
+    contractTotal: "合同金额合计",
+    summary: "年度汇总",
+    projectsView: "项目列表",
+    clients: "客户",
+    year: "年度",
+    projectName: "项目名称",
+    client: "客户",
+    contact: "联系人",
+    status: "状态",
+    tender: "投标金额",
+    contract: "合同金额",
+    feedback: "报价备注",
+    Eststartdate: "预计开工日期",
+    Estimator: "报价人",
+    projectType: "项目类型",
+    site: "项目地址",
+    empty: "没有找到记录",
+    loading: "正在从 Firebase 读取 Clients 和 quote…",
+    loaded: (p,c,q,d) => `已连接 · ${p} 个项目、${c} 个客户、${q} 条报价 · 更新于 ${d}`,
+    error: "读取失败",
+    search: "快速搜索项目 / 客户 / 状态…",
+    allYears: "全部年份",
+    exportTime: "导出时间"
+  },
+
+  en: {
+    title: "YJ Project List",
+    subtitle: "Read-only · Live data from Firebase CRM-YJ quote and Clients collections",
+    refresh: "Refresh",
+    pdf: "Print / PDF",
+    json: "JSON backup",
+    projects: "Projects",
+    awarded: "Awarded",
+    tenderTotal: "Total Tender Value",
+    contractTotal: "Total Contract Value",
+    summary: "Yearly Summary",
+    projectsView: "Project List",
+    clients: "Clients",
+    year: "Year",
+    projectName: "Project",
+    client: "Client",
+    contact: "Contact",
+    status: "Status",
+    tender: "Tender Value",
+    contract: "Contract Value",
+    feedback: "Quote Notes",
+    Eststartdate: "Est. Start Date",
+    Estimator: "Estimator",
+    projectType: "Project Type",
+    site: "Site Address",
+    empty: "No matching records",
+    loading: "Reading Clients and quote from Firebase…",
+    loaded: (p,c,q,d) => `Connected · ${p} projects, ${c} clients, ${q} quotes · Updated ${d}`,
+    error: "Read failed",
+    search: "Quick search project / client / status…",
+    allYears: "All years",
+    exportTime: "Exported"
+  }
+};
+
+const t = key => I18N[lang][key] ?? key;
+
+// ============================================================
+// 4. Common helpers
+// ============================================================
+
+const text = value => String(value ?? "").trim();
+
+const number = value => {
+  const n = Number(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+const money = value =>
+  number(value).toLocaleString("en-AU", {
+    style: "currency",
+    currency: "AUD"
+  });
+
+const esc = value =>
+  String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+
+const dateFrom = value => {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (value instanceof Date) return value;
+
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const projectYear = q => {
+  const d =
+    dateFrom(q.estStartDate) ||
+    dateFrom(q.startDate) ||
+    dateFrom(q.createdAt);
+
+  return d ? d.getFullYear() : new Date().getFullYear();
+};
+
+// ============================================================
+// 5. Contact name resolver
+// ============================================================
+
+// Supports:
+// quote.selectedContact.contactName
+// quote.client.selectedContact.contactName
+// quote.selectedClient.contactName
+// quote.selectedContact as an array
+// quote.selectedContact as a string
+
+function getContactName(quote) {
+
+  const candidates = [
+    quote?.selectedContact,
+    quote?.client?.selectedContact,
+    quote?.selectedClient,
+    quote?.client?.contacts,
+    quote?.contacts
+  ];
+
+  for (const contact of candidates) {
+
+    if (!contact) continue;
+
+    // Contact stored as a string
+    if (typeof contact === "string") {
+      if (contact.trim()) return contact.trim();
+      continue;
+    }
+
+    // Contact stored as an array
+    if (Array.isArray(contact)) {
+      const found = contact.find(item =>
+        item?.contactName || item?.name
+      );
+
+      if (found) {
+        return text(found.contactName || found.name);
+      }
+
+      continue;
+    }
+
+    // Contact stored as a Map / object
+    if (typeof contact === "object") {
+
+      const name =
+        contact.contactName ||
+        contact.name ||
+        contact.displayName;
+
+      if (name) return text(name);
+    }
+  }
+
+  return "";
+}
+
+// ============================================================
+// 6. Read Firebase collections
+// ============================================================
+
+async function loadFirebaseData() {
+
+  const connection = $("#connection");
+  const refreshButton = $("#refreshBtn");
+
+  connection.classList.remove("error");
+  connection.textContent = t("loading");
+  refreshButton.disabled = true;
+
+  try {
+
+    const [clientSnap, quoteSnap] = await Promise.all([
+      getDocs(collection(db, "Clients")),
+      getDocs(collection(db, "quote"))
+    ]);
+
+    clients = clientSnap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    quotes = quoteSnap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    const clientMap = new Map(
+      clients.map(client => [client.id, client])
+    );
+
+    // Each quote record represents one project.
+
+    projects = quotes.map(quote => {
+
+      const clientId = text(
+        quote.clientId || quote.clientID || quote.client?.id
+      );
+
+      const client =
+        clientMap.get(clientId) ||
+        clients.find(item =>
+          text(item.name).toLowerCase() ===
+          text(quote.client?.name || quote.clientName).toLowerCase()
+        ) ||
+        null;
+
+      const status = text(quote.status || "Quoting");
+
+      // Resolve contact directly from quote data.
+      const contactName = getContactName(quote);
+
+      return {
+        ...quote,
+
+        _quote: quote,
+
+        // Project information
+        projectName: text(quote.projectName),
+        projectType: text(quote.projectType),
+
+        // Client information
+        _client: client,
+
+        _clientName: text(
+          quote.client?.name ||
+          client?.name ||
+          quote.clientName
+        ),
+
+        // Contact information
+        _contact: contactName,
+
+        // Other project fields
+        _Eststartdate: text(
+          quote.estStartDate || quote.startDate
+        ),
+
+        _status: status,
+
+        _Estimator: text(quote.estimator),
+
+        _tender: number(
+          quote.esttotalvalue ??
+          quote.estTotalValue ??
+          quote.tenderValue ??
+          quote.tenderAmount
+        ),
+
+        _contract: number(
+          quote.contractValue ??
+          quote.contractAmount ??
+          quote.contractTotalValue
+        ),
+
+        _feedback: text(
+          quote.note || quote.feedback
+        ),
+
+        _year: projectYear(quote)
+      };
+    });
+
+    // ========================================================
+    // Contact diagnostics
+    // ========================================================
+
+    console.log("========== QUOTE CONTACT DEBUG ==========");
+
+    quotes.forEach(q => {
+
+      console.log({
+        projectName: q.projectName,
+        selectedContact: q.selectedContact,
+        clientSelectedContact: q.client?.selectedContact,
+        contactName: getContactName(q)
+      });
+
+    });
+
+    console.log("========== PROJECT CONTACT DEBUG ==========");
+
+    console.table(
+      projects.map(p => ({
+        projectName: p.projectName,
+        client: p._clientName,
+        contact: p._contact
+      }))
+    );
+
+    // ========================================================
+
+    lastLoadedAt = new Date();
+
+    connection.textContent = I18N[lang].loaded(
+      projects.length,
+      clients.length,
+      quotes.length,
+      lastLoadedAt.toLocaleString()
+    );
+
+    render();
+
+  } catch (error) {
+
+    console.error("Firebase read failed:", error);
+
+    connection.classList.add("error");
+
+    const detail = error.code
+      ? `${error.code}: ${error.message || ""}`
+      : (error.message || String(error));
+
+    connection.textContent =
+      `${t("error")}: ${detail}. ` +
+      (lang === "zh"
+        ? "请检查 Firebase 配置、网络连接，以及 Firestore Rules 是否允许读取 Clients 和 quote 集合。"
+        : "Check Firebase config, network access, and Firestore Rules.");
+
+    $("#content").innerHTML =
+      `<div class="empty">${esc(connection.textContent)}</div>`;
+
+  } finally {
+
+    refreshButton.disabled = false;
+
+  }
+}
+
+// ============================================================
+// 7. Filtering and statistics
+// ============================================================
+
+function getYears() {
+
+  const years = [
+    ...new Set(projects.map(q => q._year))
+  ].sort((a,b) => b-a);
+
+  return years.length
+    ? years
+    : [new Date().getFullYear()];
+}
+
+function filteredProjects(list) {
+
+  const search = text(
+    $("#searchInput").value
+  ).toLowerCase();
+
+  return list.filter(q => !search || [
+
+    q.projectName,
+    q._clientName,
+    q._contact,
+    q._status,
+    q.projectType,
+    q.siteAddress,
+    q._feedback,
+    q._Eststartdate,
+    q._Estimator
+
+  ].some(value =>
+    text(value).toLowerCase().includes(search)
+  ));
+}
+
+function stats(list) {
+
+  return {
+
+    count: list.length,
+
+    awarded: list.filter(q =>
+      q._status.toLowerCase() === "awarded"
+    ).length,
+
+    tender: list.reduce(
+      (sum,q) => sum + q._tender, 0
+    ),
+
+    contract: list.reduce(
+      (sum,q) =>
+        sum +
+        (q._status.toLowerCase() === "awarded"
+          ? q._tender
+          : q._contract),
+      0
+    )
+
+  };
+}
+
+// ============================================================
+// 8. Summary cards
+// ============================================================
+
+function renderCards() {
+
+  const visibleProjects = activeYear === "all"
+    ? projects
+    : projects.filter(p =>
+        p._year === Number(activeYear)
+      );
+
+  const s = stats(visibleProjects);
+
+  $("#totalProjects").textContent = s.count;
+  $("#totalawarded").textContent = s.awarded;
+  $("#totalTender").textContent = money(s.tender);
+  $("#totalContract").textContent = money(s.contract);
+}
+
+function renderYearSelect() {
+
+  const years = getYears();
+
+  $("#yearSelect").innerHTML =
+    `<option value="all">${esc(t("allYears"))}</option>` +
+    years.map(y =>
+      `<option value="${y}">${y}</option>`
+    ).join("");
+
+  $("#yearSelect").value = String(activeYear);
+}
+
+// ============================================================
+// 9. Project table
+// ============================================================
+
+function statusPill(status) {
+
+  const value = text(status) || "—";
+
+  const cls =
+    value.toLowerCase() === "awarded"
+      ? "awarded"
+      : /tender|quoted|quoting/i.test(value)
+        ? "tender"
+        : "";
+
+  return `<span class="pill ${cls}">${esc(value)}</span>`;
+}
+
+function renderProjectRows(list) {
+
+  const rows = filteredProjects(list);
+
+  if (!rows.length) {
+    return `
+      <tr>
+        <td class="empty" colspan="11">
+          ${esc(t("empty"))}
+        </td>
+      </tr>
+    `;
+  }
+
+  return rows.map((p,i) => `
+
+    <tr>
+
+      <td>${i+1}</td>
+
+      <td>
+        <strong>${esc(p.projectName)}</strong>
+        <div class="muted">
+          ${esc(p.projectType || "")}
+        </div>
+      </td>
+
+      <td>${esc(p._clientName)}</td>
+
+      <td>${esc(p._contact)}</td>
+
+      <td>${esc(p._Eststartdate)}</td>
+
+      <td>${esc(p._Estimator)}</td>
+
+      <td>${statusPill(p._status)}</td>
+
+      <td class="num">
+        ${money(p._tender)}
+      </td>
+
+      <td class="num">
+        ${money(
+          p._status.toLowerCase() === "awarded"
+            ? p._tender
+            : p._contract
+        )}
+      </td>
+
+      <td>${esc(p.siteAddress || "")}</td>
+
+      <td>${esc(p._feedback)}</td>
+
+    </tr>
+
+  `).join("");
+}
+
+function projectTable(list) {
+
+  return `
+
+    <table>
+
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>${t("projectName")}</th>
+          <th>${t("client")}</th>
+          <th>${t("contact")}</th>
+          <th>${t("Eststartdate")}</th>
+          <th>${t("Estimator")}</th>
+          <th>${t("status")}</th>
+          <th class="num">${t("tender")}</th>
+          <th class="num">${t("contract")}</th>
+          <th>${t("site")}</th>
+          <th>${t("feedback")}</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        ${renderProjectRows(list)}
+      </tbody>
+
+    </table>
+
+  `;
+}
+
+function renderProjects() {
+
+  const list = activeYear === "all"
+    ? projects
+    : projects.filter(q =>
+        q._year === Number(activeYear)
+      );
+
+  const filtered = filteredProjects(list).sort((a,b) =>
+
+    (
+      dateFrom(b.startDate) ||
+      dateFrom(b.createdAt) ||
+      new Date(0)
+    ) -
+
+    (
+      dateFrom(a.startDate) ||
+      dateFrom(a.createdAt) ||
+      new Date(0)
+    )
+
+  );
+
+  $("#panelTitle").textContent = t("projectsView");
+
+  $("#panelNote").textContent =
+    `${filtered.length} / ${list.length}`;
+
+  $("#content").innerHTML = projectTable(filtered);
+}
+
+
+// ============================================================
+// 10. Clients table
+// ============================================================
+
+function renderClients() {
+
+  // ----------------------------------------------------------
+  // 1. Search keyword
+  // ----------------------------------------------------------
+
+  const q = text(
+    $("#searchInput").value
+  ).toLowerCase();
+
+
+  // ----------------------------------------------------------
+  // 2. Prepare client data
+  //    Support multiple contacts
+  // ----------------------------------------------------------
+
+  const clientList = clients.map(c => {
+
+    const contacts = Array.isArray(c.contacts)
+      ? c.contacts
+      : [];
+
+    return {
+      ...c,
+
+      name: c.name || "",
+      abn: c.abn || "",
+      contacts,
+
+      address: c.address || "",
+      status: c.status || ""
+
+    };
+
+  });
+
+
+  // ----------------------------------------------------------
+  // 3. Filter clients
+  //    Search all contact names, emails and phone numbers
+  // ----------------------------------------------------------
+
+  const list = clientList.filter(c => {
+
+    const contactSearch = c.contacts.flatMap(contact => [
+      contact.contactName,
+      contact.email,
+      contact.phone
+    ]);
+
+    return !q || [
+      c.name,
+      c.abn,
+      ...contactSearch,
+      c.address,
+      c.status
+    ].some(v =>
+      text(v).toLowerCase().includes(q)
+    );
+
+  });
+
+
+  // ----------------------------------------------------------
+  // 4. Panel title and record count
+  // ----------------------------------------------------------
+
+  $("#panelTitle").textContent = t("clients");
+
+  $("#panelNote").textContent =
+    `${list.length} / ${clients.length}`;
+
+
+  // ----------------------------------------------------------
+  // 5. Render clients table
+  // ----------------------------------------------------------
+
+  $("#content").innerHTML = `
+
+    <table>
+
+      <thead>
+        <tr>
+          <th>${t("client")}</th>
+          <th>ABN</th>
+          <th>${t("contact")}</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Address</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        ${
+          list.map(c => {
+
+            const contacts = c.contacts.length
+              ? c.contacts
+              : [{}];
+
+            return `
+
+              <tr>
+
+                <td>
+                  <strong>${esc(c.name)}</strong>
+                </td>
+
+                <td>${esc(c.abn)}</td>
+
+                <td>
+                  ${contacts.map(contact => `
+                    <div class="client-contact">
+                      ${esc(contact.contactName || "-")}
+                    </div>
+                  `).join("")}
+                </td>
+
+                <td>
+                  ${contacts.map(contact => `
+                    <div class="client-contact">
+                      ${esc(contact.email || "-")}
+                    </div>
+                  `).join("")}
+                </td>
+
+                <td>
+                  ${contacts.map(contact => `
+                    <div class="client-contact">
+                      ${esc(contact.phone || "-")}
+                    </div>
+                  `).join("")}
+                </td>
+
+                <td>${esc(c.address)}</td>
+
+                <td>${esc(c.status)}</td>
+
+              </tr>
+
+            `;
+
+          }).join("") ||
+
+          `<tr>
+            <td colspan="7" class="empty">
+              ${esc(t("empty"))}
+            </td>
+          </tr>`
+        }
+
+      </tbody>
+
+    </table>
+
+  `;
+
+}
+
+
+// ============================================================
+// 11. Main rendering
+// ============================================================
+
+function render() {
+
+  document.documentElement.lang =
+    lang === "zh" ? "zh-CN" : "en";
+
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+
+  document.querySelectorAll("[data-lang]").forEach(el => {
+    el.setAttribute(
+      "aria-pressed",
+      String(el.dataset.lang === lang)
+    );
+  });
+
+  $("#searchInput").placeholder = t("search");
+
+  renderCards();
+  renderYearSelect();
+
+  $("#projectsTab").setAttribute(
+    "aria-selected",
+    String(activeView === "projects")
+  );
+
+  $("#clientsTab").setAttribute(
+    "aria-selected",
+    String(activeView === "clients")
+  );
+
+  $("#yearSelect").classList.toggle(
+    "hidden",
+    activeView === "clients"
+  );
+
+  if (activeView === "clients") {
+    renderClients();
+  } else {
+    renderProjects();
+  }
+}
+
+// ============================================================
+// 12. Export functions
+// ============================================================
+
+function exportRows() {
+
+  const exportProjects = activeYear === "all"
+    ? projects
+    : projects.filter(p =>
+        p._year === Number(activeYear)
+      );
+
+  return exportProjects.map(p => ({
+
+    Year: p._year,
+    Project: p.projectName || "",
+    Client: p._clientName,
+    Contact: p._contact,
+    Eststartdate: p._Eststartdate,
+    Estimator: p._Estimator,
+    Status: p._status,
+    TenderValue: p._tender,
+
+    ContractValue:
+      p._status.toLowerCase() === "awarded"
+        ? p._tender
+        : p._contract,
+
+    ProjectType: p.projectType || "",
+    SiteAddress: p.siteAddress || "",
+    Feedback: p._feedback
+
+  }));
+}
+
+function downloadBlob(content, filename, type) {
+
+  const url = URL.createObjectURL(
+    new Blob([content], {type})
+  );
+
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = filename;
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
+// ============================================================
+// 13. Excel export
+// ============================================================
+
+$("#xlsxBtn").addEventListener("click", () => {
+
+  const rows = exportRows();
+
+  if (!rows.length) {
+    alert(
+      lang === "zh"
+        ? "当前筛选条件下没有项目可导出。"
+        : "There are no projects to export."
+    );
+    return;
+  }
+
+  if (window.XLSX) {
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    const wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      wb,
+      ws,
+      "Projects"
+    );
+
+    const cs = XLSX.utils.json_to_sheet(
+
+      clients.map(c => ({
+        Name: c.name,
+        ABN: c.abn,
+        Contact: c.contact,
+        Email: c.email,
+        Phone: c.phone,
+        Address: c.address,
+        Status: c.status
+      }))
+
+    );
+
+    XLSX.utils.book_append_sheet(
+      wb,
+      cs,
+      "Clients"
+    );
+
+    XLSX.writeFile(
+      wb,
+      "YJ_Project_List.xlsx"
+    );
+
+  } else {
+
+    const csv = [
+      Object.keys(rows[0] || {Project:""}).join(","),
+
+      ...rows.map(r =>
+        Object.values(r).map(v =>
+          `"${String(v ?? "").replace(/"/g, '""')}"`
+        ).join(",")
+      )
+
+    ].join("\r\n");
+
+    downloadBlob(
+      "\ufeff" + csv,
+      "YJ_Project_List.csv",
+      "text/csv;charset=utf-8"
+    );
+
+  }
+
+});
+
+// ============================================================
+// 14. JSON backup
+// ============================================================
+
+$("#jsonBtn").addEventListener("click", () => {
+
+  const backup = {
+    app: "YJ Project List",
+    exportedAt: new Date().toISOString(),
+    projects,
+    clients,
+    quotes
+  };
+
+  downloadBlob(
+    JSON.stringify(backup, null, 2),
+    "YJ_Project_List_readonly_backup.json",
+    "application/json"
+  );
+
+});
+
+// ============================================================
+// 15. Print / PDF
+// ============================================================
+
+$("#printBtn").addEventListener("click", () => {
+  window.print();
+});
+
+// ============================================================
+// 16. UI events
+// ============================================================
+
+document.querySelectorAll("[data-lang]").forEach(button => {
+
+  button.addEventListener("click", () => {
+
+    lang = button.dataset.lang;
+
+    if (lastLoadedAt) {
+
+      $("#connection").textContent =
+        I18N[lang].loaded(
+          projects.length,
+          clients.length,
+          quotes.length,
+          lastLoadedAt.toLocaleString()
+        );
+
+    }
+
+    render();
+
+  });
+
+});
+
+$("#refreshBtn").addEventListener(
+  "click",
+  loadFirebaseData
+);
+
+$("#projectsTab").addEventListener("click", () => {
+
+  activeView = "projects";
+  render();
+
+});
+
+$("#clientsTab").addEventListener("click", () => {
+
+  activeView = "clients";
+  render();
+
+});
+
+$("#yearSelect").addEventListener("change", e => {
+
+  activeYear = e.target.value;
+  activeView = "projects";
+
+  render();
+
+});
+
+$("#searchInput").addEventListener("input", () => {
+
+  if (activeView === "projects") {
+    renderProjects();
+  }
+
+  if (activeView === "clients") {
+    renderClients();
+  }
+
+});
+
+// ============================================================
+// 17. Load Firebase data on page open
+// ============================================================
+
+loadFirebaseData();
+
+</script>
+</body>
+</html>
