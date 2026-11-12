@@ -90,6 +90,7 @@ function createFormFromQuote(data) {
 
     dueDate: normalizeDateInput(data.dueDate),
     estStartDate: normalizeDateInput(data.estStartDate),
+    estCompDate: normalizeDateInput(data.estCompDate),
 
     siteAddress: data.siteAddress || "",
 
@@ -629,6 +630,7 @@ function handleContactChange(contactIndex) {
 
         dueDate: form.dueDate || "",
         estStartDate: form.estStartDate || "",
+        estCompDate: form.estCompDate || "",
         siteAddress: form.siteAddress,
 
         note: form.note,
@@ -1018,6 +1020,14 @@ function handleContactChange(contactIndex) {
                           updateField("estStartDate", value)
                         }
                       />
+                      <Field
+                        label="EST.Completion Date"
+                        type="date"
+                        value={form.estCompDate}
+                        onChange={(value) =>
+                          updateField("estCompDate", value)
+                        }
+                      />
                     </>
                   ) : (
                     <>
@@ -1039,6 +1049,11 @@ function handleContactChange(contactIndex) {
                       <DisplayField
                         label="EST.Start Date"
                         value={formatDate(form.estStartDate)}
+                      />
+
+                      <DisplayField
+                        label="EST.Completion Date"
+                        value={formatDate(form.estCompDate)}
                       />
                     </>
                   )}

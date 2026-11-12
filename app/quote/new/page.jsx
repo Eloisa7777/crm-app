@@ -34,6 +34,7 @@ export default function NewquotePage() {
 
     dueDate: new Date().toISOString().split("T")[0],
     estStartDate: new Date().toISOString().split("T")[0],
+    estCompDate: new Date().toISOString().split("T")[0],
     siteAddress: "",
     projectType: "",
     note: "",
@@ -282,6 +283,7 @@ export default function NewquotePage() {
         projectName: form.projectName,
         dueDate: form.dueDate,
         estStartDate: form.estStartDate,
+        estCompDate: form.estCompDate,
 
         status: form.status,
 
@@ -827,7 +829,7 @@ export default function NewquotePage() {
                   </select>
                 </div>
 
-              {/* EST.Start Date */}
+              {/* EST. Date */}
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">
@@ -838,6 +840,20 @@ export default function NewquotePage() {
                   type="date"
                   name="estStartDate"
                   value={form.estStartDate}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  EST.Completion Date
+                </label>
+
+                <input
+                  type="date"
+                  name="estCompDate"
+                  value={form.estCompDate}
                   onChange={handleChange}
                   className="w-full rounded-lg border border-gray-300 px-4 py-3"
                 />
