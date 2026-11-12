@@ -300,16 +300,10 @@ function BlueprintBackground() {
         letterSpacing="3"
         opacity=".75"
       >
-        <text x="65" y="105">RESIDENTIAL DEVELOPMENT</text>
-        <text x="65" y="125" fontSize="9">BUILDING ELEVATION / A-001</text>
+        <text x="65" y="105">RESIDENTIAL</text>
+        <text x="65" y="885" fontSize="10">APARTMENT </text>
+        <text x="970" y="845" fontSize="10">TOWNHOUSE </text>
 
-        <text x="970" y="355">TOWNHOUSE DESIGN</text>
-        <text x="970" y="375" fontSize="9">ELEVATION / B-002</text>
-
-        <text x="65" y="885" fontSize="10">APARTMENT COMPLEX</text>
-        <text x="970" y="845" fontSize="10">TOWNHOUSE SERIES</text>
-
-        <text x="1450" y="100" fontSize="9">YJ / DESIGN</text>
       </g>
 
       {/* Crosshair */}
@@ -503,22 +497,12 @@ export default function LoginPage() {
       {/* Technical corner labels */}
       <div className="pointer-events-none absolute left-7 top-7 z-10 hidden md:block">
         <p className="font-mono text-[9px] tracking-[0.25em] text-slate-400/70">
-          YJ / ARCHITECTURAL SYSTEM
+          YJ CRM SYSTEM
         </p>
         <p className="mt-2 font-mono text-[9px] text-slate-500/70">
-          RESIDENTIAL DEVELOPMENT · AUSTRALIA
+          RESIDENTIAL · COMMERCIAL · FITOUT · QLD
         </p>
       </div>
-
-      <div className="pointer-events-none absolute bottom-7 right-7 z-10 hidden text-right md:block">
-        <p className="font-mono text-[9px] tracking-[0.2em] text-slate-400/60">
-          TECHNICAL DRAWING
-        </p>
-        <p className="mt-1 font-mono text-[9px] text-slate-500/60">
-          YJ / CRM / 001
-        </p>
-      </div>
-
 
       {/* ================================================== */}
       {/* CENTERED LOGIN CARD */}
@@ -556,27 +540,15 @@ export default function LoginPage() {
             </div>
 
             <h1 className="text-2xl font-bold tracking-tight">
-              YJ CRM
+              YJ Linings
             </h1>
 
             <p className="mt-2 text-[9px] font-semibold tracking-[0.3em] text-slate-400">
-              BUSINESS MANAGEMENT SYSTEM
+              Sign in to your workspace
             </p>
 
             <div className="mt-6 h-px w-12 bg-amber-400/70" />
 
-          </div>
-
-
-          {/* Heading */}
-          <div className="mb-7 text-center">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              Welcome back
-            </h2>
-
-            <p className="mt-2 text-xs text-slate-400">
-              Sign in to your workspace
-            </p>
           </div>
 
 
