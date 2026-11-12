@@ -631,20 +631,20 @@ export default function QuoteTimelinePage() {
     try {
       // Update Firestore
 
-      await updateDoc(
-        doc(db, "quote", pendingChange.id),
-        {
-          estStartDate: Timestamp.fromDate(
-            pendingChange.newStart
-          ),
+    await updateDoc(
+    doc(db, "quote", pendingChange.id),
+    {
+        estStartDate: pendingChange.newStart
+        ? new Date(pendingChange.newStart).toISOString().split("T")[0]
+        : "",
 
-          estCompDate: Timestamp.fromDate(
-            pendingChange.newEnd
-          ),
+        estCompDate: pendingChange.newEnd
+        ? new Date(pendingChange.newEnd).toISOString().split("T")[0]
+        : "",
 
-          updatedAt: serverTimestamp(),
-        }
-      );
+        updatedAt: serverTimestamp(),
+    }
+    );
 
       // Update local state
 
