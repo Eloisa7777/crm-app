@@ -530,8 +530,6 @@ export default function LoginPage() {
 
           {/* Top amber line */}
           <div className="absolute left-[20%] right-[20%] top-0 h-px bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
-
-
           Brand 
           <div className="mb-9 flex flex-col items-center text-center">
 

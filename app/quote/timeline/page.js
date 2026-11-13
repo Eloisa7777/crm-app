@@ -647,18 +647,22 @@ export default function QuoteTimelinePage() {
     );
 
       // Update local state
+    setQuotes((previous) =>
+      previous.map((quote) =>
+        quote.id === pendingChange.id
+          ? {
+              ...quote,
+              estStartDate: pendingChange.newStart
+                ? pendingChange.newStart.toISOString().split("T")[0]
+                : "",
 
-      setQuotes((previous) =>
-        previous.map((quote) =>
-          quote.id === pendingChange.id
-            ? {
-                ...quote,
-                estStartDate: pendingChange.newStart,
-                estCompDate: pendingChange.newEnd,
-              }
-            : quote
-        )
-      );
+              estCompDate: pendingChange.newEnd
+                ? pendingChange.newEnd.toISOString().split("T")[0]
+                : "",
+            }
+          : quote
+      )
+    );
 
       // Remove temporary preview
 
@@ -747,7 +751,7 @@ export default function QuoteTimelinePage() {
   // ==========================================================
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="quote-timeline min-h-screen bg-gray-50 p-6">
 
       <div className="mx-auto max-w-7xl space-y-6">
 

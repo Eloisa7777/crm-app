@@ -252,20 +252,20 @@ export default function HomePage() {
     attentionPurchaseOrders.length;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#F4F6F8]">
 
       {/* =====================================================
           Header
       ===================================================== */}
 
-      <header className="h-20 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
+      <header className="h-20 bg-white border-b border-[#E2E8F0] px-8 flex items-center justify-between shadow-[0_1px_3px_rgba(20,36,58,0.03)]">
 
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">
+          <h1 className="text-xl font-semibold text-[#14243A]">
             Dashboard
           </h1>
 
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-[#64748B] mt-1">
             Overview of your business operations
           </p>
         </div>
@@ -349,17 +349,17 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-4">
 
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-lg font-semibold text-[#14243A]">
                 Attention
               </h2>
 
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-[#64748B] mt-1">
                 Items requiring attention today
               </p>
             </div>
 
             {!loading && attentionCount > 0 && (
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-[#64748B]">
                 {attentionCount} item
                 {attentionCount !== 1
                   ? "s"
@@ -369,20 +369,20 @@ export default function HomePage() {
 
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(20,36,58,0.04)]">
 
             {loading ? (
-              <div className="px-6 py-8 text-sm text-gray-500">
+              <div className="px-6 py-8 text-sm text-[#64748B]">
                 Loading...
               </div>
             ) : attentionCount === 0 ? (
-              <div className="px-6 py-10 text-center">
+              <div className="px-6 py-12 text-center">
 
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-[#14243A]">
                   Nothing requires attention today
                 </div>
 
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-[#64748B] mt-1">
                   No quotes, invoices or purchase orders
                   are due today.
                 </div>
@@ -405,19 +405,19 @@ export default function HomePage() {
                         <Link
                           key={quote.id}
                           href={`/quote/${quote.id}`}
-                          className="flex items-center justify-between px-6 py-4 border-t border-gray-100 hover:bg-gray-50 transition"
+                          className="flex items-center justify-between gap-4 px-6 py-4 border-t border-[#EDF1F5] hover:bg-[#F8FAFC] transition-colors"
                         >
 
                           <div className="min-w-0">
 
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-[#14243A]">
                               {quote.quoteNumber ||
                                 quote.number ||
                                 quote.name ||
                                 `Quote ${quote.id}`}
                             </div>
 
-                            <div className="text-xs text-gray-500 mt-1 truncate">
+                            <div className="text-xs text-[#64748B] mt-1 truncate">
                               {quote.clientName ||
                                 quote.client?.name ||
                                 quote.projectName ||
@@ -456,18 +456,18 @@ export default function HomePage() {
                         <Link
                           key={invoice.id}
                           href={`/invoices/${invoice.id}`}
-                          className="flex items-center justify-between px-6 py-4 border-t border-gray-100 hover:bg-gray-50 transition"
+                          className="flex items-center justify-between gap-4 px-6 py-4 border-t border-[#EDF1F5] hover:bg-[#F8FAFC] transition-colors"
                         >
 
                           <div className="min-w-0">
 
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-[#14243A]">
                               {invoice.invoiceNumber ||
                                 invoice.number ||
                                 `Invoice ${invoice.id}`}
                             </div>
 
-                            <div className="text-xs text-gray-500 mt-1 truncate">
+                            <div className="text-xs text-[#64748B] mt-1 truncate">
                               {invoice.clientName ||
                                 invoice.client?.name ||
                                 invoice.projectName ||
@@ -478,7 +478,7 @@ export default function HomePage() {
 
                           <div className="ml-4 flex items-center gap-3">
 
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-[#1E344F]">
                               {invoice.total != null
                                 ? `$${Number(
                                     invoice.total
@@ -518,18 +518,18 @@ export default function HomePage() {
                         <Link
                           key={bill.id}
                           href={`/bills/${bill.id}`}
-                          className="flex items-center justify-between px-6 py-4 border-t border-gray-100 hover:bg-gray-50 transition"
+                          className="flex items-center justify-between gap-4 px-6 py-4 border-t border-[#EDF1F5] hover:bg-[#F8FAFC] transition-colors"
                         >
 
                           <div className="min-w-0">
 
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-[#14243A]">
                               {bill.billNumber ||
                                 bill.number ||
                                 `Bill ${bill.id}`}
                             </div>
 
-                            <div className="text-xs text-gray-500 mt-1 truncate">
+                            <div className="text-xs text-[#64748B] mt-1 truncate">
                               {bill.supplierName ||
                                 bill.supplier?.name ||
                                 bill.projectName ||
@@ -540,7 +540,7 @@ export default function HomePage() {
 
                           <div className="ml-4 flex items-center gap-3">
 
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-[#1E344F]">
                               {bill.total != null
                                 ? `$${Number(
                                     bill.total
@@ -582,18 +582,18 @@ export default function HomePage() {
                         <Link
                           key={po.id}
                           href={`/purchase-orders/${po.id}`}
-                          className="flex items-center justify-between px-6 py-4 border-t border-gray-100 hover:bg-gray-50 transition"
+                          className="flex items-center justify-between gap-4 px-6 py-4 border-t border-[#EDF1F5] hover:bg-[#F8FAFC] transition-colors"
                         >
 
                           <div className="min-w-0">
 
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-[#14243A]">
                               {po.poNumber ||
                                 po.number ||
                                 `PO ${po.id}`}
                             </div>
 
-                            <div className="text-xs text-gray-500 mt-1 truncate">
+                            <div className="text-xs text-[#64748B] mt-1 truncate">
                               {po.supplier?.name ||
                                 po.supplierName ||
                                 po.projectName ||
@@ -636,17 +636,19 @@ function DashboardCard({
   description,
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6">
+    <div className="relative bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-[0_2px_8px_rgba(20,36,58,0.04)] overflow-hidden transition-shadow hover:shadow-[0_6px_18px_rgba(20,36,58,0.08)]">
 
-      <div className="text-sm text-gray-500">
+      <div className="absolute top-0 left-0 right-0 h-[3px] bg-[#D6A64B]" />
+
+      <div className="text-sm text-[#64748B]">
         {title}
       </div>
 
-      <div className="text-2xl font-semibold text-gray-900 mt-2">
+      <div className="text-2xl font-semibold text-[#14243A] mt-2">
         {value}
       </div>
 
-      <div className="text-xs text-gray-500 mt-2">
+      <div className="text-xs text-[#64748B] mt-2">
         {description}
       </div>
 
@@ -667,13 +669,13 @@ function AttentionGroup({
   return (
     <div>
 
-      <div className="px-6 py-3 bg-gray-50 flex items-center justify-between">
+      <div className="px-6 py-3 bg-[#F8FAFC] border-t border-[#EDF1F5] flex items-center justify-between">
 
-        <div className="text-sm font-semibold text-gray-800">
+        <div className="text-sm font-semibold text-[#1E344F]">
           {title}
         </div>
 
-        <div className="text-xs text-gray-500">
+        <div className="text-xs font-medium text-[#64748B]">
           {count}
         </div>
 
@@ -694,7 +696,7 @@ function AttentionBadge({
   children,
 }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 whitespace-nowrap">
+    <span className="inline-flex items-center rounded-full bg-[#FBF3E3] border border-[#F0DFBA] px-2.5 py-1 text-xs font-semibold text-[#A87924] whitespace-nowrap">
       {children}
     </span>
   );

@@ -7,21 +7,20 @@ import { useEffect, useState } from "react";
 
 // ============================================================
 // 1. Sidebar Menu Configuration
-// Each menu is linked to Firestore role permission
 // ============================================================
 
 const menuItems = [
   { name: "Dashboard", href: "/", icon: "▦", permission: "dashboard" },
-{
-  name: "Quote",
-  href: "/quote",
-  icon: "▣",
-  permission: "quote",
-  children: [
-    { name: "Timeline", href: "/quote/timeline" },
-    { name: "Quote List", href: "/quote" },
-  ],
-},
+  {
+    name: "Quote",
+    href: "/quote",
+    icon: "▣",
+    permission: "quote",
+    children: [
+      { name: "Timeline", href: "/quote/timeline" },
+      { name: "Quote List", href: "/quote" },
+    ],
+  },
   { name: "Projects", href: "/projects", icon: "▣", permission: "projects" },
   { name: "Suppliers", href: "/suppliers", icon: "♙", permission: "suppliers" },
   { name: "Subcontractors", href: "/subcontractors", icon: "♙", permission: "subcontractors" },
@@ -49,8 +48,7 @@ export default function Sidebar() {
   const [error, setError] = useState("");
 
   // ============================================================
-  // 3. Get authenticated user and RBAC permissions
-  // Data comes from server-side /api/me
+  // 3. Get Authenticated User and RBAC Permissions
   // ============================================================
 
   useEffect(() => {
@@ -79,7 +77,6 @@ export default function Sidebar() {
         setUid(data.uid || "");
         setRole(data.role || "");
 
-        // Only accept a valid permissions object.
         setPermissions(
           data.permissions &&
           typeof data.permissions === "object" &&
@@ -114,22 +111,18 @@ export default function Sidebar() {
     };
   }, []);
 
-  useEffect(() => {
-  if (pathname.startsWith("/quote")) {
-    setQuoteOpen(true);
-  }
-}, [pathname]);
   // ============================================================
-  // 4. RBAC Sidebar Filtering
-  //
-  // Admin:
-  //   Show all menus
-  //
-  // Other roles:
-  //   Show menus only when permission === true
-  //
-  // Loading:
-  //   Do not show menus before permissions are loaded
+  // 4. Auto Open Quote Submenu
+  // ============================================================
+
+  useEffect(() => {
+    if (pathname.startsWith("/quote")) {
+      setQuoteOpen(true);
+    }
+  }, [pathname]);
+
+  // ============================================================
+  // 5. RBAC Sidebar Filtering
   // ============================================================
 
   const visibleMenuItems = !loading
@@ -141,7 +134,7 @@ export default function Sidebar() {
     : [];
 
   // ============================================================
-  // 5. Logout
+  // 6. Logout
   // ============================================================
 
   async function handleLogout() {
@@ -165,29 +158,84 @@ export default function Sidebar() {
   }
 
   // ============================================================
-  // 6. Render Sidebar
+  // 7. Active Menu Styles
+  // ============================================================
+
+  const activeStyle =
+    "bg-[#D6A64B] text-[#14243A] shadow-sm font-semibold";
+
+  const inactiveStyle =
+    "text-[#CBD5E1] hover:bg-[#29415D] hover:text-white";
+
+  // ============================================================
+  // 8. Render Sidebar
   // ============================================================
 
   return (
-    <aside className="w-64 bg-indigo-800 border-r border-gray-200 min-h-screen flex flex-col shrink-0">
+    <aside className="
+      w-64
+      bg-[#14243A]
+      border-r border-[#2C4059]
+      min-h-screen
+      flex flex-col
+      shrink-0
+    ">
+
+      {/* Brand Header */}
+      <div className="px-6 py-6 border-b border-[#2C4059]">
+        <div className="flex items-center gap-3">
+
+          <div className="
+            w-10 h-10
+            rounded-xl
+            bg-[#D6A64B]
+            flex items-center justify-center
+            text-[#14243A]
+            font-bold text-lg
+            shadow-md
+          ">
+            YJ
+          </div>
+
+          <div>
+            <div className="text-white font-semibold tracking-wide">
+              YJ Building
+            </div>
+
+            <div className="text-[10px] text-[#94A3B8] tracking-[2px] uppercase">
+              Management System
+            </div>
+          </div>
+
+        </div>
+      </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-5">
+      <nav className="flex-1 px-3 py-6">
 
-        <div className="text-xs font-semibold text-gray-400 uppercase px-3 mb-3">
+        <div className="
+          text-[10px]
+          font-semibold
+          text-[#94A3B8]
+          uppercase
+          tracking-[2px]
+          px-3 mb-4
+        ">
           Management
         </div>
 
         <div className="space-y-1">
 
           {loading ? (
-            <div className="px-3 py-3 text-xs text-gray-400">
+            <div className="px-3 py-3 text-xs text-[#94A3B8]">
               Loading permissions...
             </div>
+
           ) : error ? (
             <div className="px-3 py-3 text-xs text-red-300">
               {error}
             </div>
+
           ) : (
             visibleMenuItems.map((item) => {
               const active =
@@ -195,95 +243,94 @@ export default function Sidebar() {
                   ? pathname === "/"
                   : pathname.startsWith(item.href);
 
-            const hasChildren = Array.isArray(item.children);
+              const hasChildren = Array.isArray(item.children);
 
-            // Quote menu
-            if (hasChildren) {
-              return (
-                <div key={item.href}>
+              // Quote Parent Menu
+              if (hasChildren) {
+                return (
+                  <div key={item.href}>
 
-                  {/* Quote parent */}
-                  <button
-                    type="button"
-                    onClick={() => setQuoteOpen(!quoteOpen)}
-                    className={`
-                      w-full flex items-center justify-between
-                      px-3 py-2.5
-                      rounded-lg
-                      text-sm font-medium
-                      transition
-                      ${
-                        active
-                          ? "bg-amber-400 text-black"
-                          : "text-gray-300 hover:bg-indigo-300 hover:text-black"
-                      }
-                    `}
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className="w-5 text-center text-base">
-                        {item.icon}
+                    <button
+                      type="button"
+                      onClick={() => setQuoteOpen(!quoteOpen)}
+                      className={`
+                        w-full flex items-center justify-between
+                        px-3 py-3
+                        rounded-lg
+                        text-sm font-medium
+                        transition-all duration-200
+                        ${active ? activeStyle : inactiveStyle}
+                      `}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="w-5 text-center text-base">
+                          {item.icon}
+                        </span>
+
+                        <span>{item.name}</span>
                       </span>
-                      <span>{item.name}</span>
-                    </span>
 
-                    <span className="text-xs">
-                      {quoteOpen ? "▾" : "▸"}
-                    </span>
-                  </button>
+                      <span className="text-xs opacity-70">
+                        {quoteOpen ? "▾" : "▸"}
+                      </span>
+                    </button>
 
-                  {/* Quote submenu */}
-                  {quoteOpen && (
-                    <div className="ml-8 mt-1 space-y-1 border-l border-indigo-500 pl-3">
+                    {/* Quote Submenu */}
+                    {quoteOpen && (
+                      <div className="
+                        ml-6 mt-2 mb-2
+                        space-y-1
+                        border-l-2 border-[#43556B]
+                        pl-3
+                      ">
 
-                      {item.children.map((child) => {
-                        const childActive =
-                          child.href === "/quote"
-                            ? pathname === "/quote"
-                            : pathname === child.href ||
-                              pathname.startsWith(child.href + "/");
+                        {item.children.map((child) => {
+                          const childActive =
+                            child.href === "/quote"
+                              ? pathname === "/quote"
+                              : pathname === child.href ||
+                                pathname.startsWith(child.href + "/");
 
-                        return (
-                          <Link
-                            key={child.href}
-                            href={child.href}
-                            className={`
-                              block px-3 py-2
-                              rounded-lg
-                              text-sm
-                              transition
-                              ${
-                                childActive
-                                  ? "bg-amber-400 text-black font-semibold"
-                                  : "text-gray-300 hover:bg-indigo-300 hover:text-black"
-                              }
-                            `}
-                          >
-                            {child.name}
-                          </Link>
-                        );
-                      })}
+                          return (
+                            <Link
+                              key={child.href}
+                              href={child.href}
+                              className={`
+                                block px-3 py-2.5
+                                rounded-md
+                                text-xs
+                                transition-all duration-200
+                                ${
+                                  childActive
+                                    ? "bg-[#D6A64B] text-[#14243A] font-semibold"
+                                    : "text-[#AFC0D2] hover:bg-[#29415D] hover:text-white"
+                                }
+                              `}
+                            >
+                              {child.name}
+                            </Link>
+                          );
+                        })}
 
-                    </div>
-                  )}
-                </div>
-              );
-            }
+                      </div>
+                    )}
 
+                  </div>
+                );
+              }
+
+              // Normal Menu
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={`
                     flex items-center gap-3
-                    px-3 py-2.5
+                    px-3 py-3
                     rounded-lg
                     text-sm font-medium
-                    transition
-                    ${
-                      active
-                        ? "bg-amber-400 text-black"
-                        : "text-gray-300 hover:bg-indigo-300 hover:text-black"
-                    }
+                    transition-all duration-200
+                    ${active ? activeStyle : inactiveStyle}
                   `}
                 >
                   <span className="w-5 text-center text-base">
@@ -300,57 +347,108 @@ export default function Sidebar() {
       </nav>
 
       {/* Logout */}
-      <div className="flex items-center gap-3 mb-4 px-6">
+      <div className="px-5 pb-5">
+
         <button
           onClick={handleLogout}
-          className="rounded-lg bg-indigo-800 px-5 py-2.5 border border-gray-200 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+          className="
+            w-full
+            rounded-lg
+            bg-[#1E344F]
+            px-5 py-3
+            border border-[#43556B]
+            text-sm font-medium
+            text-[#CBD5E1]
+            transition-all duration-200
+            hover:bg-[#D6A64B]
+            hover:text-[#14243A]
+            hover:border-[#D6A64B]
+            cursor-pointer
+          "
         >
           Logout
         </button>
+
       </div>
 
       {/* User Information */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-5 border-t border-[#2C4059]">
+
         <div className="flex items-center gap-3">
 
-          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-semibold text-indigo-800 shrink-0">
+          <div className="
+            w-10 h-10
+            rounded-full
+            bg-[#29415D]
+            border border-[#52647A]
+            flex items-center justify-center
+            text-sm font-semibold
+            text-[#E8BE70]
+            shrink-0
+          ">
             YJ
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-white truncate">
+
+            <div className="text-sm font-semibold text-white truncate">
               YJ Building
             </div>
 
-            <div className="text-xs text-gray-400 truncate">
+            <div className="text-xs text-[#94A3B8] truncate">
               {role ? role.toUpperCase() : "No role"}
             </div>
+
           </div>
 
         </div>
 
         {/* Firebase UID */}
-        <div className="mt-4 pt-3 border-t border-indigo-600">
-          <div className="text-xs font-semibold text-gray-400 mb-2">
+        <div className="mt-5 pt-4 border-t border-[#2C4059]">
+
+          <div className="
+            text-[10px]
+            font-semibold
+            text-[#94A3B8]
+            uppercase
+            tracking-wider
+            mb-2
+          ">
             Firebase User UID
           </div>
 
-          <div className="text-xs text-amber-300 break-all select-all leading-relaxed">
+          <div className="
+            text-xs
+            text-[#E8BE70]
+            break-all
+            select-all
+            leading-relaxed
+          ">
             {loading
               ? "Loading..."
               : uid || error || "Not signed in"}
           </div>
+
         </div>
 
         {/* User Role */}
-        <div className="mt-3">
-          <div className="text-xs font-semibold text-gray-400 mb-1">
+        <div className="mt-4">
+
+          <div className="
+            text-[10px]
+            font-semibold
+            text-[#94A3B8]
+            uppercase
+            tracking-wider
+            mb-2
+          ">
             CRM Role
           </div>
 
-          <div className="text-xs text-green-300">
+          <div className="text-xs font-medium text-[#6EE7B7]">
             {loading ? "Loading..." : role || "No role"}
           </div>
+
         </div>
 
       </div>

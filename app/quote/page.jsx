@@ -147,21 +147,21 @@ export default function QuotePage() {
   ===================================================== */
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="general-page min-h-screen p-8">
 
       {/* =================================================
           Header
       ================================================= */}
 
-      <div className="mb-8 flex items-center justify-between">
+      <div className="page-header mb-8 flex items-center justify-between">
 
         <div>
 
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="page-title text-2xl font-semibold text-gray-900">
             Quote
           </h1>
 
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="page-descriptionmt-1 text-sm text-gray-500">
             Manage and create quotes
           </p>
 
@@ -173,7 +173,7 @@ export default function QuotePage() {
             window.location.href =
               "/quote/new";
           }}
-          className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
+          className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
         >
           + New Quote
         </button>
@@ -184,7 +184,7 @@ export default function QuotePage() {
           Filters
       ================================================= */}
 
-      <div className="mb-5 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="page-toolbar mb-5 rounded-xl border border-gray-200 bg-white p-4">
 
         <div className="flex gap-3">
 
@@ -257,7 +257,7 @@ export default function QuotePage() {
           Quote Table
       ================================================= */}
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="page-card overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
 
         <table className="w-full">
 
