@@ -161,7 +161,7 @@ export default function QuotePage() {
             Quote
           </h1>
 
-          <p className="page-descriptionmt-1 text-sm text-gray-500">
+          <p className="page-description mt-1 text-sm text-gray-500">
             Manage and create quotes
           </p>
 
@@ -184,7 +184,7 @@ export default function QuotePage() {
           Filters
       ================================================= */}
 
-      <div className="page-toolbar mb-5 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="mb-5 rounded-xl border border-gray-200 bg-white p-4">
 
         <div className="flex gap-3">
 

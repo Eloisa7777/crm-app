@@ -1069,7 +1069,7 @@ export default function SubInvoiceDetailPage() {
 
   if (!invoice) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="general-page min-h-screen p-8">
         <Link
           href="/sub-invoices"
           className="text-sm text-gray-500"
@@ -1169,7 +1169,7 @@ export default function SubInvoiceDetailPage() {
                   setEditing(true);
                   setSaved(false);
                 }}
-                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-white hover:bg-amber-400 hover:text-black"
+                className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
               >
                 Edit
               </button>
@@ -1188,7 +1188,7 @@ export default function SubInvoiceDetailPage() {
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white hover:bg-amber-400 hover:text-black disabled:opacity-50"
+                  className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
                 >
                   {saving ? "Saving..." : "Save Changes"}
                 </button>

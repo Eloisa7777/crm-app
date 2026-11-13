@@ -530,14 +530,14 @@ export default function NewPurchaseOrderPage() {
   ===================================================== */
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="general-page min-h-screen p-8">
       <div className="mx-auto max-w-6xl">
 
         {/* =================================================
             Header
         ================================================= */}
 
-        <div className="mb-8 flex items-center justify-between">
+        <div className="page-header mb-8 flex items-center justify-between">
           <div>
             <Link
               href="/purchase-orders"
@@ -546,11 +546,11 @@ export default function NewPurchaseOrderPage() {
               ← Purchase Orders
             </Link>
 
-            <h1 className="mt-2 text-3xl font-bold">
+            <h1 className="page-title mt-2 text-3xl font-bold">
               New Purchase Order
             </h1>
 
-            <p className="mt-1 text-gray-500">
+            <p className="page-description mt-1 text-gray-500">
               Create a new purchase order
             </p>
           </div>

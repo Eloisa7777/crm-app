@@ -745,7 +745,7 @@ function handleContactChange(contactIndex) {
                 <button
                   type="button"
                   onClick={startEditing}
-                  className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+                  className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
                 >
                   Edit
                 </button>
@@ -764,7 +764,7 @@ function handleContactChange(contactIndex) {
                     type="button"
                     onClick={handleSave}
                     disabled={saving}
-                    className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
                   >
                     {saving ? "Saving..." : "Save"}
                   </button>
