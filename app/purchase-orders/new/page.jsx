@@ -912,7 +912,7 @@ export default function NewPurchaseOrderPage() {
             <button
               type="button"
               onClick={addItem}
-              className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-gray-100 transition hover:bg-amber-400 hover:text-black"
+              className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
             >
               + Add Item
             </button>
@@ -1150,7 +1150,7 @@ export default function NewPurchaseOrderPage() {
 
           <Link
             href="/purchase-orders"
-            className="rounded-lg border bg-white px-6 py-3 font-medium"
+            className="cursor-pointer rounded-lg border bg-white px-6 py-3 font-medium"
           >
             Cancel
           </Link>
@@ -1163,7 +1163,7 @@ export default function NewPurchaseOrderPage() {
               loadingProjects ||
               loadingSuppliers
             }
-            className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
           >
             {saving
               ? "Saving..."
@@ -1195,7 +1195,7 @@ export default function NewPurchaseOrderPage() {
                   form.poNumber ||
                   "purchase-order"
                 }.pdf`}
-                className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white"
+                className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
               >
                 {({ loading }) =>
                   loading

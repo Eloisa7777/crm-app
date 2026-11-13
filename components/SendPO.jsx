@@ -320,7 +320,7 @@ export default function SendPO({
           }
         }}
         disabled={sending}
-        className="cursor-pointer rounded-md bg-indigo-800 px-5 py-2.5 font-medium text-white hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
       >
         {sending ? "Sending..." : "Edit PO Email"}
       </button>

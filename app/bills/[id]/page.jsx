@@ -923,7 +923,7 @@ function normaliseItems(items) {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="cursor-pointer rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1108,7 +1108,7 @@ function normaliseItems(items) {
                 form.poId ? (
                   <Link
                     href={`/purchase-orders/${form.poId}`}
-                    className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-4 py-3 text-indigo-700 transition hover:bg-indigo-50 hover:text-indigo-900"
+                    className="flex items-center justify-between gap-3 rounded-lg bg-[#14243A] px-4 py-3 text-white transition hover:bg-[#D6A64B] hover:text-[#14243A]"
                   >
                     <span className="break-words font-medium underline decoration-indigo-300 underline-offset-2">
                       {form.poNumber}
@@ -1300,7 +1300,7 @@ function normaliseItems(items) {
               <button
                 type="button"
                 onClick={addItem}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
               >
                 + Add Item
               </button>

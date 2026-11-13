@@ -755,7 +755,7 @@ function handleContactChange(contactIndex) {
                     type="button"
                     onClick={cancelEditing}
                     disabled={saving}
-                    className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                    className="cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -1324,7 +1324,7 @@ function handleContactChange(contactIndex) {
                 <button
                   type="button"
                   onClick={addItem}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
                 >
                   + Add Action
                 </button>

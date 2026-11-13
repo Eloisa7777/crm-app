@@ -268,7 +268,7 @@ export default function NewSupplierPage() {
 
             <Link
               href="/suppliers"
-              className="px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
+              className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
             >
               Cancel
             </Link>
@@ -276,7 +276,7 @@ export default function NewSupplierPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer"
+              className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
             >
               {saving ? "Saving..." : "Save Supplier"}
             </button>

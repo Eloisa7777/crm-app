@@ -506,7 +506,7 @@ export default function ClientDetailsPage() {
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 cursor-pointer"
+                className="cursor-pointer px-4 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 cursor-pointer"
               >
                 Cancel
               </button>
@@ -649,7 +649,7 @@ export default function ClientDetailsPage() {
                         <button
                           type="button"
                           onClick={addContact}
-                          className="text-sm font-medium text-indigo-700 hover:text-indigo-900 cursor-pointer"
+                          className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
                         >
                           + Add Contact
                         </button>

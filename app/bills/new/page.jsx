@@ -1047,7 +1047,7 @@ export default function NewBillPage() {
             <button
               type="button"
               onClick={addItem}
-              className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
             >
               + Add Item
             </button>

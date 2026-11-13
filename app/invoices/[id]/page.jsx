@@ -1024,7 +1024,7 @@ export default function InvoiceDetailPage() {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className=" cursor-pointer rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1701,7 +1701,7 @@ export default function InvoiceDetailPage() {
               fileName={`${
                 form.invoiceNumber || "invoice"
               }.pdf`}
-              className="cursor-pointer rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black"
+              className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
             >
               {({ loading }) =>
                 loading

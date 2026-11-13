@@ -1058,7 +1058,7 @@ export default function SubInvoiceDetailPage() {
 
           <Link
             href="/login"
-            className="mt-5 inline-block rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white"
+            className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
           >
             Go to Login
           </Link>
@@ -1179,7 +1179,7 @@ export default function SubInvoiceDetailPage() {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm"
+                  className="cursor-pointer rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm"
                 >
                   Cancel
                 </button>
@@ -1408,7 +1408,7 @@ export default function SubInvoiceDetailPage() {
               <button
                 type="button"
                 onClick={addItem}
-                className="rounded-lg bg-indigo-800 px-4 py-2 text-sm text-white"
+                className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
               >
                 + Add Item
               </button>
@@ -1595,7 +1595,7 @@ export default function SubInvoiceDetailPage() {
                   <SubinvoicePDF invoice={pdfData} />
                 }
                 fileName={`${form.invoiceNumber || "invoice"}.pdf`}
-                className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm text-white"
+                className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
               >
                 {({ loading: pdfLoading }) =>
                   pdfLoading

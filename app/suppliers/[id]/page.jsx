@@ -452,7 +452,7 @@ const [form, setForm] = useState({
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-200 cursor-pointer"
+                className="cursor-pointer rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-200 cursor-pointer"
               >
                 Cancel
               </button>

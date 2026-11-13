@@ -288,7 +288,7 @@ export default function NewClientPage() {
               <button
                 type="button"
                 onClick={addContact}
-                className="px-4 py-2 text-sm font-medium text-indigo-800 border border-indigo-200 rounded-lg hover:bg-indigo-50"
+                className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
               >
                 + Add Contact
               </button>
@@ -455,7 +455,7 @@ export default function NewClientPage() {
 
             <Link
               href="/clients"
-              className="px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
+              className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
             >
               Cancel
             </Link>
@@ -463,7 +463,7 @@ export default function NewClientPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-indigo-800 px-5 py-2.5 text-sm font-medium text-gray-100 transition hover:bg-amber-400 hover:text-black cursor-pointer disabled:opacity-50"
+              className="btn-primary cursor-pointer rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
             >
               {saving ? "Saving..." : "Save Client"}
             </button>
