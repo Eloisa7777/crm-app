@@ -538,7 +538,7 @@ export default function LoginPage() {
             </div>*/}
 
             <h1 className="text-2xl font-bold tracking-tight">
-              YJ Linings
+              YJ Building Evolution
             </h1>
 
             <p className="mt-2 text-[9px] font-semibold tracking-[0.3em] text-slate-400">
@@ -698,7 +698,7 @@ export default function LoginPage() {
 
         {/* Copyright */}
         <p className="mt-6 text-center text-[10px] tracking-wide text-slate-400/70">
-          © {new Date().getFullYear()} YJ Linings Creation Pty Ltd.
+          © {new Date().getFullYear()} YJ Building Evolution Pty Ltd.
         </p>
 
       </div>
