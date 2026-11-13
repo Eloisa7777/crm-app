@@ -694,7 +694,7 @@ export default function NewBillPage() {
   ===================================================== */
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
+    <main className="general-page mx-auto max-w-6xl p-6">
 
       {/* Page Header */}
 
@@ -1275,7 +1275,7 @@ export default function NewBillPage() {
               loadingPOs ||
               !selectedSupplier
             }
-            className="rounded bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
           >
             {saving ? "Saving..." : "Save Bill"}
           </button>
