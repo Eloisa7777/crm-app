@@ -28,7 +28,7 @@ const menuItems = [
   { name: "Purchase Orders", href: "/purchase-orders", icon: "□", permission: "purchaseOrders" },
   { name: "Bills", href: "/bills", icon: "□", permission: "bills" },
   { name: "Invoices", href: "/invoices", icon: "▤", permission: "invoices" },
-  { name: "Subcontractor Invoices", href: "/sub-invoices", icon: "▤", permission: "subInvoices" },
+  //{ name: "Subcontractor Invoices", href: "/sub-invoices", icon: "▤", permission: "subInvoices" },
   { name: "User Settings", href: "/settings", icon: "⚙", permission: "settings" },
 ];
 

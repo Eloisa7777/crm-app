@@ -777,6 +777,19 @@ export default function QuoteTimelinePage() {
             </p>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+
+              {/* Project List Button */}
+              <button
+                type="button"
+                onClick={() => window.open("/projectlist.html", "_blank")}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-400 hover:bg-gray-50"
+              >
+                <span>☷</span>
+                Project List
+              </button>
+
+
           {/* Year Navigation */}
 
           <div className="flex items-center gap-2">
@@ -810,7 +823,7 @@ export default function QuoteTimelinePage() {
             >
               Today
             </button>
-
+           </div>
           </div>
         </div>
 

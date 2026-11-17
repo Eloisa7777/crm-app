@@ -73,7 +73,7 @@ tfoot td{font-weight:650;background:var(--total)}
   table{min-width:0!important;font-size:9pt}
   th,td{padding:5px;border:1px solid #bbb;color:#000}
   th{background:#eee!important}
-  .cards{grid-template-columns:repeat(4,1fr)}
+  .cards{grid-template-columns:repeat(5,1fr)}
 }
 </style>
 </head>
@@ -122,6 +122,10 @@ tfoot td{font-weight:650;background:var(--total)}
     <div class="label" data-i18n="contractTotal">合同金额合计</div>
     <div class="val" id="totalContract">—</div>
   </div>
+  <div class="card">
+  <div class="label" data-i18n="conversionRate">投标转化率</div>
+  <div class="val" id="conversionRate">—</div>
+</div>
 </div>
 
 <div class="tabs no-print" id="tabs">
@@ -226,7 +230,8 @@ const I18N = {
     error: "读取失败",
     search: "快速搜索项目 / 客户 / 状态…",
     allYears: "全部年份",
-    exportTime: "导出时间"
+    exportTime: "导出时间",
+    conversionRate: "投标转化率",
   },
 
   en: {
@@ -260,7 +265,8 @@ const I18N = {
     error: "Read failed",
     search: "Quick search project / client / status…",
     allYears: "All years",
-    exportTime: "Exported"
+    exportTime: "Exported",
+    conversionRate: "Tender Conversion Rate"
   }
 };
 
@@ -619,10 +625,18 @@ function renderCards() {
 
   const s = stats(visibleProjects);
 
-  $("#totalProjects").textContent = s.count;
-  $("#totalawarded").textContent = s.awarded;
-  $("#totalTender").textContent = money(s.tender);
-  $("#totalContract").textContent = money(s.contract);
+$("#totalProjects").textContent = s.count;
+$("#totalawarded").textContent = s.awarded;
+$("#totalTender").textContent = money(s.tender);
+$("#totalContract").textContent = money(s.contract);
+
+// 投标转化率 = 合同金额合计 / 投标金额合计
+const conversionRate = s.tender > 0
+  ? (s.contract / s.tender) * 100
+  : 0;
+
+$("#conversionRate").textContent =
+  `${conversionRate.toFixed(2)}%`;
 }
 
 function renderYearSelect() {

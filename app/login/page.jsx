@@ -15,7 +15,7 @@ import { auth } from "@/lib/firebase";
 const ROLE_REDIRECTS = {
   admin: "/",
   yjpo: "/purchase-orders",
-  yjest: "/quote",
+  yjest: "/quote/timeline",
   subsup: "/sub-invoices",
 };
 
