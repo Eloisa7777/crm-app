@@ -3,7 +3,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-
+import AIInvoiceUpload from "@/components/bills/AIInvoiceUpload";
 import {
   collection,
   getDocs,
@@ -76,6 +76,147 @@ export default function NewBillPage() {
   ]);
 
   const [includeGST, setIncludeGST] = useState(true);
+
+  /* =====================================================
+   AI Invoice Recognition Handler
+===================================================== */
+
+async function handleInvoiceRecognized(invoice) {
+  // 1. Fill Bill Details
+  setBill((previous) => ({
+    ...previous,
+
+    billNumber:
+      invoice.billNumber || previous.billNumber,
+
+    billDate:
+      invoice.billDate || previous.billDate,
+
+    dueDate:
+      invoice.dueDate || previous.dueDate,
+
+    notes:
+      invoice.notes || previous.notes,
+  }));
+
+  // 2. Fill Bill Items
+  if (Array.isArray(invoice.items) && invoice.items.length > 0) {
+    setItems(
+      invoice.items.map((item) => ({
+        description: item.description || "",
+        quantity: Number(item.quantity) || 1,
+        rate: Number(item.rate) || 0,
+
+        // GST is calculated using the existing
+        // Include GST switch below.
+        tax: false,
+      }))
+    );
+  }
+
+  // 3. Update existing GST switch
+  setIncludeGST(
+    Number(invoice.gstRate) > 0 ||
+    Number(invoice.gstAmount) > 0
+  );
+
+  // 4. Try to match Supplier / Subcontractor
+  let warning = "";
+
+  try {
+    const [supplierSnapshot, subcontractorSnapshot] =
+      await Promise.all([
+        getDocs(collection(db, "Suppliers")),
+        getDocs(collection(db, "Subcontractors")),
+      ]);
+
+    const candidates = [
+      ...supplierSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        type: "Supplier",
+        ...doc.data(),
+      })),
+
+      ...subcontractorSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        type: "Subcontractor",
+        ...doc.data(),
+      })),
+    ];
+
+    const normaliseName = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+
+    const normaliseABN = (value) =>
+      String(value || "").replace(/\D/g, "");
+
+    const invoiceABN = normaliseABN(invoice.supplierABN);
+    const invoiceName = normaliseName(invoice.supplierName);
+
+    let matched = [];
+
+    // Prefer exact ABN match
+    if (invoiceABN) {
+      matched = candidates.filter(
+        (supplier) =>
+          normaliseABN(supplier.abn) === invoiceABN
+      );
+    }
+
+    // If ABN is unavailable, use exact company name
+    if (matched.length === 0 && invoiceName) {
+      matched = candidates.filter((supplier) => {
+        const supplierName = normaliseName(
+          supplier.name || supplier.companyName
+        );
+
+        return supplierName === invoiceName;
+      });
+    }
+
+    // Only select automatically when exactly one match exists
+    if (matched.length === 1) {
+      const selected = matched[0];
+
+      setSupplierType(selected.type);
+      setSelectedSupplierId(selected.id);
+
+      setSuppliers((previous) => {
+        const exists = previous.some(
+          (item) => item.id === selected.id
+        );
+
+        return exists
+          ? previous
+          : [...previous, selected];
+      });
+
+    } else {
+      setSelectedSupplierId("");
+
+      warning = matched.length > 1
+        ? "Invoice recognised, but multiple suppliers matched. Please select the correct supplier manually."
+        : "Invoice recognised, but the supplier was not found. Please select the supplier manually.";
+    }
+
+  } catch (err) {
+    console.error("Supplier matching error:", err);
+
+    setSelectedSupplierId("");
+
+    warning =
+      "Invoice details were recognised, but supplier matching failed. Please select the supplier manually.";
+  }
+
+  // 5. Reset existing save messages
+  setSavedBill(null);
+  setSuccess("");
+  setError("");
+
+  return { warning };
+}
 
   /* =====================================================
      Save State
@@ -694,7 +835,7 @@ export default function NewBillPage() {
   ===================================================== */
 
   return (
-    <main className="general-page mx-auto max-w-6xl p-6">
+    <main className="mx-auto max-w-6xl p-6">
 
       {/* Page Header */}
 
@@ -716,18 +857,30 @@ export default function NewBillPage() {
         </div>
       )}
 
-      {/* Success */}
+        {/* Success */}
 
-      {success && (
-        <div className="mb-4 rounded border border-green-300 bg-green-50 p-3 text-sm text-green-700">
-          {success}
-        </div>
-      )}
+        {success && (
+          <div className="mb-4 rounded border border-green-300 bg-green-50 p-3 text-sm text-green-700">
+            {success}
+          </div>
+        )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-6"
-      >
+        {/* =================================================
+            AI Invoice Upload
+        ================================================= */}
+
+        <AIInvoiceUpload
+          onInvoiceRecognized={handleInvoiceRecognized}
+        />
+
+        {/* =================================================
+            Existing Manual Bill Form
+        ================================================= */}
+
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6"
+        >
 
         {/* =================================================
             Purchase Order
@@ -1047,7 +1200,7 @@ export default function NewBillPage() {
             <button
               type="button"
               onClick={addItem}
-              className="cursor-pointer px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50"
+              className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
             >
               + Add Item
             </button>
@@ -1275,7 +1428,7 @@ export default function NewBillPage() {
               loadingPOs ||
               !selectedSupplier
             }
-            className="btn-primary rounded-lg bg-[#14243A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-[#D6A64B] hover:text-[#14243A] hover:shadow-md"
+            className="rounded bg-blue-600 px-6 py-3 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save Bill"}
           </button>
