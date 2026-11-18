@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const SESSION_EXPIRES_IN = 4 * 60 * 60 * 1000;
 const SESSION_COOKIE_NAME = "yj_session";
 
-const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup", "gen"];
+const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup", "general"];
 
 // ============================================================
 // POST: Firebase Login + Firestore RBAC

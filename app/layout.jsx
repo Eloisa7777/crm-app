@@ -10,7 +10,7 @@ export const metadata = {
 };
 
 // All valid CRM roles.
-const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup", "gen"];
+const VALID_ROLES = ["admin", "yjpo", "yjest", "subsup", "general"];
 
 // Must match login API and proxy.
 const SESSION_COOKIE_NAME = "yj_session";

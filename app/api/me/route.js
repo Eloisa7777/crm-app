@@ -15,7 +15,7 @@ const VALID_ROLES = [
   "yjpo",
   "yjest",
   "subsup",
-  "gen",
+  "general",
 ];
 
 const SESSION_COOKIE_NAME = "yj_session";
