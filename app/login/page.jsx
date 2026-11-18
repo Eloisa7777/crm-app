@@ -17,6 +17,7 @@ const ROLE_REDIRECTS = {
   yjpo: "/purchase-orders",
   yjest: "/quote/timeline",
   subsup: "/sub-invoices",
+  gen: "/upcoming.html",
 };
 
 
