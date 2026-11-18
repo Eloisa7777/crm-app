@@ -20,6 +20,16 @@ const PUBLIC_PATHS = [
 // ============================================================
 
 const PAGE_PERMISSIONS = [
+    {
+    paths: ["/projectlist.html"],
+    permission: "/quote",
+    fallback: "/login",
+  },
+  {
+    paths: ["/upcoming.html"],
+    permission: "upcoming",
+    fallback: "/login",
+  },
   {
     paths: ["/"],
     permission: "dashboard",

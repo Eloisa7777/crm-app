@@ -30,6 +30,7 @@ const menuItems = [
   { name: "Invoices", href: "/invoices", icon: "▤", permission: "invoices" },
   //{ name: "Subcontractor Invoices", href: "/sub-invoices", icon: "▤", permission: "subInvoices" },
   { name: "User Settings", href: "/settings", icon: "⚙", permission: "settings" },
+  { name: "Future Projects", href: "/upcoming.html", icon: "<", permission: "upcoming" },
 ];
 
 // ============================================================

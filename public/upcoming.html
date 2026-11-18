@@ -1,0 +1,780 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YJ Projects</title>
+
+<style>
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #1d2330;
+  --muted: #6b7280;
+  --line: #e3e6eb;
+  --accent: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1218;
+    --card: #171b23;
+    --text: #e7eaf0;
+    --muted: #9aa3b2;
+    --line: #2a303b;
+    --accent: #6ea8ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+}
+
+.wrap {
+  max-width: 1100px;
+  margin: auto;
+  padding: 35px 22px 60px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+h1 {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 5px;
+  letter-spacing: -0.5px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn,
+.lang button {
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 13px;
+  cursor: pointer;
+}
+
+.btn:hover { border-color: var(--accent); }
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.lang {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.lang button {
+  border: 0;
+  border-radius: 0;
+}
+
+.lang button[aria-pressed="true"] {
+  background: var(--accent);
+  color: white;
+}
+
+.statusbar {
+  margin-bottom: 20px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.statusbar.error {
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 25px;
+}
+
+.toolbar strong { font-size: 17px; }
+
+.timeline { padding: 5px 0 10px; }
+
+.timeline-year {
+  display: grid;
+  grid-template-columns: 95px minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 30px;
+}
+
+.timeline-year-label {
+  font-size: 19px;
+  font-weight: 750;
+  color: var(--accent);
+  padding-top: 2px;
+}
+
+.timeline-items {
+  border-left: 2px solid var(--line);
+  padding-left: 28px;
+}
+
+.timeline-item {
+  position: relative;
+  padding-bottom: 32px;
+}
+
+.timeline-item:last-child { padding-bottom: 8px; }
+
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -35px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--card);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.timeline-date {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-project {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.5;
+  margin-bottom: 5px;
+}
+
+.timeline-client {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.empty {
+  text-align: center;
+  padding: 45px 15px;
+  color: var(--muted);
+}
+
+.footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .wrap { padding: 22px 13px 40px; }
+  h1 { font-size: 22px; }
+  .panel { padding: 16px 13px; }
+
+  .timeline-year {
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .timeline-year-label { font-size: 16px; }
+  .timeline-items { padding-left: 21px; }
+  .timeline-item::before { left: -28px; }
+  .timeline-project { font-size: 15px; }
+}
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .wrap {
+    max-width: none;
+    padding: 0;
+  }
+
+  .no-print,
+  .statusbar,
+  .footer {
+    display: none !important;
+  }
+
+  .panel {
+    border: 0;
+    padding: 0;
+  }
+
+  .timeline-items { border-left-color: #ddd; }
+  .timeline-year-label { color: #2563eb; }
+  .timeline-item::before { background: #2563eb; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div>
+      <h1 data-i18n="title">YJ Projects</h1>
+      <div class="muted" data-i18n="subtitle">Project Timeline</div>
+    </div>
+
+    <div class="actions no-print">
+      <div class="lang">
+        <button data-lang="zh" aria-pressed="true">中文</button>
+        <button data-lang="en" aria-pressed="false">EN</button>
+      </div>
+
+      <button class="btn" id="refreshBtn" data-i18n="refresh">
+        刷新数据
+      </button>
+    </div>
+  </header>
+
+  <!-- Firebase Connection Status -->
+  <div id="connection" class="statusbar" role="status">
+    正在连接 Firebase...
+  </div>
+
+  <!-- Timeline Panel -->
+  <section class="panel">
+
+    <div class="toolbar">
+      <div>
+        <strong id="panelTitle">Project Timeline</strong>
+        <div class="muted" id="panelNote">Awarded Projects</div>
+      </div>
+    </div>
+
+    <div id="content" class="timeline">
+      <div class="empty">Loading projects...</div>
+    </div>
+
+  </section>
+
+  <div class="footer" data-i18n="footer">
+    YJ Projects · Project Timeline
+  </div>
+
+</div>
+
+
+<!-- Firebase SDK -->
+<script type="module">
+
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+
+import {
+  getFirestore,
+  collection,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+
+// ============================================================
+// 1. Firebase configuration
+// ============================================================
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBlx8gbftIkvnRhrQByK0EuRfY0ASMTygg",
+  authDomain: "crm-yj.firebaseapp.com",
+  projectId: "crm-yj",
+  storageBucket: "crm-yj.firebasestorage.app",
+  messagingSenderId: "436337299218",
+  appId: "1:436337299218:web:8f7f607d5962e0d063edcb"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+
+// ============================================================
+// 2. State
+// ============================================================
+
+const $ = selector => document.querySelector(selector);
+
+let lang = "zh";
+let projects = [];
+let lastLoadedAt = null;
+
+
+// ============================================================
+// 3. Translations
+// ============================================================
+
+const I18N = {
+
+  zh: {
+    title: "YJ 项目展示",
+    subtitle: "项目时间线 · Project Timeline",
+    refresh: "刷新数据",
+    loading: "正在从 Firebase 读取项目数据...",
+    connected: "Firebase 已连接",
+    updated: "最后更新",
+    error: "数据读取失败",
+    projectTimeline: "Awarded 项目时间线",
+    projectCount: "个项目",
+    client: "客户",
+    empty: "目前没有 Awarded 项目",
+    unknownDate: "预计开工日期待定",
+    projectType: "项目类型",
+    contractValue: "合同金额",
+    footer: "YJ Projects · Project Timeline"
+  },
+
+  en: {
+    title: "YJ Projects",
+    subtitle: "Project Timeline",
+    refresh: "Refresh",
+    loading: "Loading projects from Firebase...",
+    connected: "Firebase connected",
+    updated: "Last updated",
+    error: "Failed to load data",
+    projectTimeline: "Awarded Projects",
+    projectCount: "Projects",
+    client: "Client",
+    empty: "No Awarded projects found",
+    unknownDate: "Estimated start date TBC",
+    projectType: "Project Type",
+    contractValue: "Contract Value",
+    footer: "YJ Projects · Project Timeline"
+  }
+
+};
+
+const t = key => I18N[lang][key] ?? key;
+
+
+// ============================================================
+// 4. Common helpers
+// ============================================================
+
+const text = value =>
+  String(value ?? "").trim();
+
+const esc = value =>
+  String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+
+
+// ============================================================
+// 5. Date resolver
+// ============================================================
+
+function dateFrom(value) {
+
+  if (!value) return null;
+
+  if (typeof value?.toDate === "function") {
+    const d = value.toDate();
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "number") {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === "string") {
+
+    const v = value.trim();
+    if (!v) return null;
+
+    const match = v.match(
+      /^(\d{4})-(\d{1,2})-(\d{1,2})$/
+    );
+
+    if (match) {
+
+      const d = new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3])
+      );
+
+      if (
+        d.getFullYear() !== Number(match[1]) ||
+        d.getMonth() !== Number(match[2]) - 1 ||
+        d.getDate() !== Number(match[3])
+      ) {
+        return null;
+      }
+
+      return d;
+    }
+
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+}
+
+
+// ============================================================
+// 6. Date formatting
+// ============================================================
+
+function formatDate(date) {
+
+  if (!date) return t("unknownDate");
+
+  return date.toLocaleDateString(
+    lang === "zh" ? "zh-CN" : "en-AU",
+    {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    }
+  );
+}
+
+
+// ============================================================
+// 7. Read Firebase quote collection only
+// ============================================================
+
+async function loadFirebaseData() {
+
+  const connection = $("#connection");
+  const refreshButton = $("#refreshBtn");
+
+  connection.classList.remove("error");
+  connection.textContent = t("loading");
+  refreshButton.disabled = true;
+
+  try {
+
+    // Only read quote collection
+    const quoteSnap = await getDocs(
+      collection(db, "quote")
+    );
+
+    // Prepare quote data
+    const quotes = quoteSnap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Only Awarded projects
+    const awardedQuotes = quotes.filter(quote => {
+
+      const status = text(quote.status).toLowerCase();
+
+      return status === "awarded";
+
+    });
+
+    // Resolve project information
+    projects = awardedQuotes.map(quote => {
+
+        // Contract Value: convert to millions, 1 decimal place
+        const contractValue = Number(quote.esttotalvalue);
+
+      return {
+
+        // Project Name
+        projectName: text(quote.projectName),
+
+          projectType: text(quote.projectType),
+
+          contractValue: Number.isFinite(contractValue)
+            ? (contractValue / 1000000).toFixed(1)
+            : "—",
+
+
+        // Estimated Start Date
+        date:
+          dateFrom(quote.estStartDate) ||
+          dateFrom(quote.startDate)
+
+      };
+
+    });
+
+    // Remove records without project names
+    projects = projects.filter(project =>
+      project.projectName
+    );
+
+    // Sort by estimated start date
+    projects.sort((a, b) => {
+
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+
+      return a.date - b.date;
+
+    });
+
+    // Update connection information
+    lastLoadedAt = new Date();
+
+    connection.textContent =
+      `${t("connected")} · ${t("updated")}: ` +
+      lastLoadedAt.toLocaleString();
+
+    // Render timeline
+    render();
+
+  } catch (error) {
+
+    console.error("Firebase read failed:", error);
+
+    connection.classList.add("error");
+
+    const detail = error.code
+      ? `${error.code}: ${error.message || ""}`
+      : error.message || String(error);
+
+    connection.textContent =
+      `${t("error")}: ${detail}`;
+
+    $("#content").innerHTML = `
+      <div class="empty">
+        ${esc(connection.textContent)}
+      </div>
+    `;
+
+  } finally {
+
+    refreshButton.disabled = false;
+
+  }
+
+}
+
+// ============================================================
+// 8. Render Timeline
+// ============================================================
+
+function renderProjects() {
+
+  const list = projects;
+
+  $("#panelTitle").textContent = t("projectTimeline");
+
+  $("#panelNote").textContent =
+    `${list.length} ${t("projectCount")}`;
+
+  if (!list.length) {
+
+    $("#content").innerHTML = `
+      <div class="empty">
+        ${esc(t("empty"))}
+      </div>
+    `;
+
+    return;
+  }
+
+
+  // Group projects by year
+  const groups = new Map();
+
+  list.forEach(project => {
+
+    const year = project.date
+      ? String(project.date.getFullYear())
+      : "TBC";
+
+    if (!groups.has(year)) {
+      groups.set(year, []);
+    }
+
+    groups.get(year).push(project);
+
+  });
+
+
+  // Render year groups
+  const html = Array.from(groups.entries())
+
+    .map(([year, items]) => `
+
+      <div class="timeline-year">
+
+        <div class="timeline-year-label">
+          ${esc(year)}
+        </div>
+
+        <div class="timeline-items">
+
+          ${items.map(project => `
+
+            <div class="timeline-item">
+
+              <div class="timeline-date">
+                ${esc(formatDate(project.date))}
+              </div>
+
+              <div class="timeline-project">
+                ${esc(project.projectName)}
+              </div>
+
+              <div class="timeline-client">
+                ${esc(t("projectType"))}:
+                ${esc(project.projectType || "—")}
+              </div>
+
+              <div class="timeline-client">
+                ${esc(t("contractValue"))}:
+                $${esc(project.contractValue)}M
+              </div>
+
+            </div>
+
+          `).join("")}
+
+        </div>
+
+      </div>
+
+    `)
+
+    .join("");
+
+
+  $("#content").innerHTML = html;
+
+}
+
+
+// ============================================================
+// 9. Main render
+// ============================================================
+
+function render() {
+
+  document.documentElement.lang =
+    lang === "zh" ? "zh-CN" : "en";
+
+  // Update language buttons
+  document.querySelectorAll("[data-lang]")
+    .forEach(button => {
+
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.lang === lang)
+      );
+
+    });
+
+  // Update static text
+  document.querySelectorAll("[data-i18n]")
+    .forEach(element => {
+
+      element.textContent = t(element.dataset.i18n);
+
+    });
+
+  // Update connection status
+  if (lastLoadedAt) {
+
+    $("#connection").textContent =
+      `${t("connected")} · ${t("updated")}: ` +
+      lastLoadedAt.toLocaleString();
+
+  }
+
+  renderProjects();
+
+}
+
+
+// ============================================================
+// 10. UI Events
+// ============================================================
+
+// Language switching
+document.querySelectorAll("[data-lang]")
+  .forEach(button => {
+
+    button.addEventListener("click", () => {
+
+      lang = button.dataset.lang;
+      render();
+
+    });
+
+  });
+
+// Refresh Firebase data
+$("#refreshBtn").addEventListener(
+  "click",
+  loadFirebaseData
+);
+
+
+// ============================================================
+// 11. Initial Firebase loading
+// ============================================================
+
+loadFirebaseData();
+
+</script>
+
+</body>
+</html>
