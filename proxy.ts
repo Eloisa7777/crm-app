@@ -22,7 +22,7 @@ const PUBLIC_PATHS = [
 const PAGE_PERMISSIONS = [
     {
     paths: ["/projectlist.html"],
-    permission: "/quote",
+    permission: "quote",
     fallback: "/login",
   },
   {
